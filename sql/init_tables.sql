@@ -1,0 +1,139 @@
+-- ============================================================
+-- SCRIPTS DE CREATION ET D'ALIMENTATION DES TABLES
+-- Schema : DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT
+-- ============================================================
+
+-- 1. CREATION DU SCHEMA
+-- ============================================================
+CREATE SCHEMA IF NOT EXISTS DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT
+    COMMENT = 'Schema pour la gestion des evenements MetPark';
+
+
+-- 2. CREATION DES TABLES
+-- ============================================================
+
+-- Table des types d'événements
+CREATE OR REPLACE TABLE DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT.T_TYPE_EVENEMENT (
+    CODE_TYPE_EVENEMENT NUMBER(38,0),
+    LIBELLE_TYPE_EVENEMENT VARCHAR(200),
+    CATEGORIE VARCHAR(100),
+    IS_ACTIVE BOOLEAN
+);
+
+-- Table des lieux
+CREATE OR REPLACE TABLE DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT.T_LIEU_EVENEMENT (
+    CODE_LIEU NUMBER(38,0),
+    LIBELLE_LIEU VARCHAR(300),
+    VILLE VARCHAR(100),
+    CODE_POSTAL VARCHAR(10),
+    IS_ACTIVE BOOLEAN
+);
+
+-- Table des impacts
+CREATE OR REPLACE TABLE DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT.T_IMPACT_EVENEMENT (
+    CODE_IMPACT NUMBER(38,0),
+    LIBELLE_IMPACT VARCHAR(200),
+    NIVEAU_SEVERITE NUMBER(1,0),
+    IS_ACTIVE BOOLEAN
+);
+
+-- Table principale des événements
+CREATE OR REPLACE TABLE DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT.T_BASE_EVENEMENT (
+    CODE_EVENEMENT NUMBER(38,0) NOT NULL PRIMARY KEY,
+    TITRE_EVENEMENT VARCHAR(300) NOT NULL,
+    CODE_TYPE_EVENEMENT NUMBER(38,0) NOT NULL,
+    CODE_LIEU NUMBER(38,0) NOT NULL,
+    CODE_IMPACT NUMBER(38,0) NOT NULL,
+    DATE_DEBUT TIMESTAMP_NTZ(9) NOT NULL,
+    DATE_FIN TIMESTAMP_NTZ(9),
+    COMMENTAIRE VARCHAR(2000),
+    NOM_CREATEUR VARCHAR(100),
+    NOM_MODIFICATEUR VARCHAR(100),
+    DATE_CREATION TIMESTAMP_NTZ(9) DEFAULT CURRENT_TIMESTAMP(),
+    DATE_MODIFICATION TIMESTAMP_NTZ(9),
+    IS_ACTIVE BOOLEAN DEFAULT TRUE
+);
+
+-- Table de liaison événement <-> parking
+CREATE OR REPLACE TABLE DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT.T_EVENEMENT_PARC (
+    CODE_EVENEMENT NUMBER(38,0),
+    CODE_PARC VARCHAR(20),
+    NOM_PARC VARCHAR(200)
+);
+
+-- Table d'historique (SCD2 - snapshot complet à chaque action)
+CREATE OR REPLACE TABLE DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT.T_HISTORIQUE_EVENEMENT (
+    CODE_HISTORIQUE NUMBER(38,0) NOT NULL AUTOINCREMENT PRIMARY KEY,
+    CODE_EVENEMENT NUMBER(38,0) NOT NULL,
+    TITRE_EVENEMENT VARCHAR(300),
+    TYPE_EVENEMENT VARCHAR(200),
+    CATEGORIE VARCHAR(200),
+    LIEU VARCHAR(200),
+    VILLE VARCHAR(200),
+    IMPACT VARCHAR(200),
+    NIVEAU_SEVERITE NUMBER(38,0),
+    DATE_DEBUT TIMESTAMP_NTZ(9),
+    DATE_FIN TIMESTAMP_NTZ(9),
+    COMMENTAIRE VARCHAR(2000),
+    PARKINGS_IMPACTES VARCHAR(2000),
+    IS_ACTIVE NUMBER(1,0) DEFAULT 1,
+    MODIFIE_PAR VARCHAR(100),
+    ACTION VARCHAR(50),
+    DATE_DEBUT_VALIDITE TIMESTAMP_NTZ(9) DEFAULT CURRENT_TIMESTAMP(),
+    DATE_FIN_VALIDITE TIMESTAMP_NTZ(9)
+);
+
+-- Séquence pour les CODE_EVENEMENT
+CREATE OR REPLACE SEQUENCE DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT.SEQ_EVENEMENT
+    START WITH 1 INCREMENT BY 1 ORDER;
+
+
+-- 3. ALIMENTATION DES DONNEES DE REFERENCE
+-- ============================================================
+
+-- Types d'événements
+INSERT INTO DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT.T_TYPE_EVENEMENT VALUES
+(1, 'Travaux voirie', 'Infrastructure', TRUE),
+(2, 'Travaux parking', 'Infrastructure', TRUE),
+(3, 'Marathon / Course à pied', 'Événement sportif', TRUE),
+(4, 'Match / Événement sportif', 'Événement sportif', TRUE),
+(5, 'Foire / Marché', 'Événement commercial', TRUE),
+(6, 'Concert / Spectacle', 'Événement culturel', TRUE),
+(7, 'Fête municipale', 'Événement culturel', TRUE),
+(8, 'Manifestation', 'Perturbation sociale', TRUE),
+(9, 'Grève transports', 'Perturbation sociale', TRUE),
+(10, 'Inondation', 'Catastrophe naturelle', TRUE),
+(11, 'Tempête / Intempéries', 'Catastrophe naturelle', TRUE),
+(12, 'Incendie', 'Catastrophe naturelle', TRUE),
+(13, 'Accident véhicule', 'Incident', TRUE),
+(14, 'Panne équipement majeure', 'Incident technique', TRUE),
+(15, 'Fermeture administrative', 'Réglementaire', TRUE),
+(16, 'Surcharge exceptionnelle', 'Affluence', TRUE),
+(17, 'Période de vacances', 'Affluence', TRUE),
+(18, 'Déviation circulation', 'Infrastructure', TRUE);
+
+-- Lieux
+INSERT INTO DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT.T_LIEU_EVENEMENT VALUES
+(1, 'Centre-ville', 'Bordeaux', '33000', TRUE),
+(2, 'Quartier gare Saint-Jean', 'Bordeaux', '33000', TRUE),
+(3, 'Place de la Victoire', 'Bordeaux', '33000', TRUE),
+(4, 'Quais de Bordeaux', 'Bordeaux', '33000', TRUE),
+(5, 'Mériadeck', 'Bordeaux', '33000', TRUE),
+(6, 'Gambetta', 'Bordeaux', '33000', TRUE),
+(7, 'Chartrons', 'Bordeaux', '33000', TRUE),
+(8, 'Lac / Parc des expositions', 'Bordeaux', '33300', TRUE),
+(9, 'Rive droite - Bastide', 'Bordeaux', '33100', TRUE),
+(10, 'Arena / Floirac', 'Floirac', '33270', TRUE),
+(11, 'Pessac centre', 'Pessac', '33600', TRUE),
+(12, 'Mérignac aéroport', 'Mérignac', '33700', TRUE),
+(13, 'Talence université', 'Talence', '33400', TRUE);
+
+-- Impacts
+INSERT INTO DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT.T_IMPACT_EVENEMENT VALUES
+(1, 'Aucun impact notable', 1, TRUE),
+(2, 'Ralentissement', 2, TRUE),
+(3, 'Surcharge temporaire', 2, TRUE),
+(4, 'Accès restreint', 3, TRUE),
+(5, 'Déviation imposée', 3, TRUE),
+(6, 'Fermeture partielle', 3, TRUE),
+(7, 'Blocage total', 4, TRUE);
