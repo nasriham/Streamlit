@@ -1,0 +1,25 @@
+# created-by: streamlit-in-workspaces; skill-version=1.0.0
+definition_version: 2
+entities:
+  streamlit_app:
+    type: streamlit
+    identifier:
+      database: DB_REFERENTIEL_DEV
+      schema: S_REFERENTIEL_EVENEMENT
+      name: GESTION_EVENEMENTS
+    title: gestion-evenements
+    query_warehouse: WH_HORS_PRODUCTION
+    compute_pool: SYSTEM_COMPUTE_POOL_CPU
+    run_mode: SpcsOnly
+    execute_as: OWNER
+    main_file: streamlit_app.py
+    artifacts:
+      - pyproject.toml
+      - streamlit_app.py
+      - .streamlit/config.toml
+      - core/db.py
+      - core/queries.py
+      - core/functions.py
+      - pages/gestion_evenements.py
+      - pages/occupation_parking.py
+      - assets/logo_metpark.svg
