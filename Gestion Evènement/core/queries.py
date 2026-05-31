@@ -1,6 +1,6 @@
 """Toutes les requêtes SQL centralisées."""
 
-from core.db import run_query, run_dml, SCHEMA, SCHEMA_GOLD
+from core.db import run_query, run_dml, SCHEMA
 
 
 # ===== EVENEMENTS =====
@@ -58,9 +58,10 @@ def get_ref_impacts():
 
 def get_parkings():
     return run_query(f"""
-        SELECT DISTINCT PHNUM AS CODE_PARC, PHNAME AS NOM_PARC
-        FROM {SCHEMA_GOLD}.DIM_TERMINAL
-        ORDER BY PHNAME
+        SELECT CODE_PARC, NOM_PARC
+        FROM {SCHEMA}.T_PARKING
+        WHERE IS_ACTIVE = TRUE
+        ORDER BY NOM_PARC
     """, ttl=60)
 
 
@@ -206,29 +207,45 @@ def close_all_snapshots(code_evt: int):
     """)
 
 
-# ===== OCCUPATION / TRAFIC =====
+# ===== OCCUPATION / IMPACT PAR PARKING =====
 
-def get_occupation_data():
+def get_evenements_par_parking():
+    """Get events grouped by impacted parking."""
     return run_query(f"""
         SELECT
-            DATE_JOUR, TRANCHE_HORAIRE, PARKING_HOUSE_NUM, PARKING_HOUSE_NAME,
-            NB_ENTREES, NB_SORTIES, VARIATION_OCCUPATION, NB_EVENEMENTS_TOTAL
-        FROM {SCHEMA_GOLD}.KPI_OCCUPATION_HORAIRE
-        ORDER BY DATE_JOUR DESC, TRANCHE_HORAIRE
-    """, ttl=300)
+            ep.NOM_PARC AS PARKING,
+            ep.CODE_PARC,
+            e.CODE_EVENEMENT,
+            e.TITRE_EVENEMENT,
+            t.LIBELLE_TYPE_EVENEMENT AS TYPE_EVENEMENT,
+            t.CATEGORIE,
+            i.LIBELLE_IMPACT AS IMPACT,
+            i.NIVEAU_SEVERITE,
+            e.DATE_DEBUT,
+            e.DATE_FIN,
+            e.IS_ACTIVE
+        FROM {SCHEMA}.T_EVENEMENT_PARC ep
+        JOIN {SCHEMA}.T_BASE_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
+        LEFT JOIN {SCHEMA}.T_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
+        LEFT JOIN {SCHEMA}.T_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
+        WHERE e.IS_ACTIVE = TRUE
+        ORDER BY ep.NOM_PARC, e.DATE_DEBUT DESC
+    """)
 
 
-def get_trafic_summary():
+def get_stats_par_parking():
+    """Get event count and max severity per parking."""
     return run_query(f"""
         SELECT
-            PARKING_HOUSE_NAME, PARKING_HOUSE_NUM,
-            COUNT(*) AS NB_MOUVEMENTS,
-            COUNT(CASE WHEN EVENT_TYPE = 187 THEN 1 END) AS TOTAL_ENTREES,
-            COUNT(CASE WHEN EVENT_TYPE = 186 THEN 1 END) AS TOTAL_SORTIES,
-            MIN(EVENT_TIME) AS PREMIERE_ACTIVITE,
-            MAX(EVENT_TIME) AS DERNIERE_ACTIVITE
-        FROM {SCHEMA_GOLD}.FCT_TRAFIC
-        WHERE EVENT_TYPE IN (186, 187)
-        GROUP BY PARKING_HOUSE_NAME, PARKING_HOUSE_NUM
-        ORDER BY NB_MOUVEMENTS DESC
-    """, ttl=300)
+            ep.NOM_PARC AS PARKING,
+            COUNT(DISTINCT ep.CODE_EVENEMENT) AS NB_EVENEMENTS,
+            MAX(i.NIVEAU_SEVERITE) AS SEVERITE_MAX,
+            MIN(e.DATE_DEBUT) AS PREMIER_EVENEMENT,
+            MAX(e.DATE_DEBUT) AS DERNIER_EVENEMENT
+        FROM {SCHEMA}.T_EVENEMENT_PARC ep
+        JOIN {SCHEMA}.T_BASE_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
+        LEFT JOIN {SCHEMA}.T_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
+        WHERE e.IS_ACTIVE = TRUE
+        GROUP BY ep.NOM_PARC
+        ORDER BY NB_EVENEMENTS DESC
+    """)

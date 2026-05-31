@@ -4,7 +4,6 @@ import streamlit as st
 conn = st.connection("snowflake")
 
 SCHEMA = "DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT"
-SCHEMA_GOLD = "DB_DATAPLATFORM_DEV.S_BI_GOLD"
 
 
 def run_dml(query: str):
