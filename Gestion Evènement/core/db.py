@@ -3,7 +3,7 @@ import streamlit as st
 # -- Snowflake connection singleton --
 conn = st.connection("snowflake")
 
-SCHEMA = "DB_REFERENTIEL_DEV.S_REFERENTIEL_EVENEMENT"
+SCHEMA = "DB_REFERENTIEL_DEV.S_REFERENTIEL"
 
 
 def run_dml(query: str):
