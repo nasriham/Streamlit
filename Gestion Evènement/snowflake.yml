@@ -5,7 +5,7 @@ entities:
     type: streamlit
     identifier:
       database: DB_REFERENTIEL_DEV
-      schema: S_REFERENTIEL_EVENEMENT
+      schema: S_REFERENTIEL
       name: GESTION_EVENEMENTS
     title: gestion-evenements
     query_warehouse: WH_HORS_PRODUCTION
