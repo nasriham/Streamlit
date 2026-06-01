@@ -16,8 +16,8 @@ def get_current_user() -> str:
     except Exception:
         pass
     try:
-        if hasattr(st, "experimental_user") and st.experimental_user.user_name:
-            return st.experimental_user.user_name
+        if hasattr(st, "user") and st.user.user_name:
+            return st.user.user_name
     except Exception:
         pass
     df = run_query("SELECT CURRENT_USER() AS USERNAME")
@@ -29,15 +29,11 @@ def search_evenements(df: pd.DataFrame, search_term: str) -> pd.DataFrame:
     if not search_term:
         return df
     term = search_term.lower()
-    mask = (
-        df["TITRE_EVENEMENT"].str.lower().str.contains(term, na=False) |
-        df["TYPE_EVENEMENT"].str.lower().str.contains(term, na=False) |
-        df["CATEGORIE"].str.lower().str.contains(term, na=False) |
-        df["LIEU"].str.lower().str.contains(term, na=False) |
-        df["VILLE"].str.lower().str.contains(term, na=False) |
-        df["IMPACT"].str.lower().str.contains(term, na=False) |
-        df["CODE_EVENEMENT"].astype(str).str.contains(term, na=False)
-    )
+    mask = df["TITRE_EVENEMENT"].str.lower().str.contains(term, na=False)
+    mask = mask | df["CODE_EVENEMENT"].astype(str).str.contains(term, na=False)
+    for col in ["TYPE_EVENEMENT", "CATEGORIE", "DESCRIPTION", "LIEU", "VILLE", "IMPACT"]:
+        if col in df.columns:
+            mask = mask | df[col].str.lower().str.contains(term, na=False)
     return df[mask]
 
 
