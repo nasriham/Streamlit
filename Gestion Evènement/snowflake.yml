@@ -20,6 +20,8 @@ entities:
       - core/db.py
       - core/queries.py
       - core/functions.py
-      - pages/gestion_evenements.py
+      - pages/accueil.py
+      - pages/evenements_externes.py
+      - pages/evenements_techniques.py
       - pages/occupation_parking.py
       - assets/logo_metpark.svg
