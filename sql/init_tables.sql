@@ -297,3 +297,135 @@ INSERT INTO DB_REFERENTIEL_DEV.S_REFERENTIEL.T_PARKING VALUES
 (168, 'VICTOR HUGO Entresol', 200, 1, 1, TRUE),
 (68, 'VICTOR HUGO Etage', 300, 2, 2, TRUE),
 (169, 'VICTOR HUGO Sous-Sol', 250, 1, 1, TRUE);
+
+
+-- 4. ALIMENTATION DES DONNEES EXEMPLE
+-- ============================================================
+
+-- Événements
+INSERT INTO DB_REFERENTIEL_DEV.S_REFERENTIEL.T_BASE_EVENEMENT
+(CODE_EVENEMENT, TITRE_EVENEMENT, CODE_TYPE_EVENEMENT, CODE_DESCRIPTION, DESCRIPTION_AUTRE,
+ CODE_LIEU, CODE_IMPACT, DATE_DEBUT, DATE_FIN,
+ IS_JOURNEE_PARTIELLE, CRENEAU,
+ IS_PLACES_IMPACTEES, NB_PLACES_IMPACTEES, FERMETURE_TOTALE,
+ IS_PISTES_IMPACTEES, NB_PISTES_ENTREE_FERMEES, NB_PISTES_SORTIE_FERMEES,
+ TYPE_TRAVAUX, CONTACT_INTERNE, CONTACT_EXTERNE, IS_TRAVAUX_PHASES,
+ COMMENTAIRE, NOM_CREATEUR, DATE_CREATION, IS_ACTIVE)
+VALUES
+-- Événement externe : Foire aux vins
+(1, 'Foire aux vins 2025', 1, 1, NULL,
+ 8, 3, '2025-06-25 09:00:00', '2025-06-29 20:00:00',
+ FALSE, NULL,
+ FALSE, NULL, FALSE,
+ FALSE, NULL, NULL,
+ NULL, NULL, NULL, FALSE,
+ 'Événement au Parc des Expositions - forte affluence parking Lac', 'HNASRI', CURRENT_TIMESTAMP(), TRUE),
+
+-- Événement externe : Marathon
+(2, 'Marathon de Bordeaux 2025', 5, 13, NULL,
+ 4, 5, '2025-06-22 06:00:00', '2025-06-22 16:00:00',
+ TRUE, 'Matin',
+ FALSE, NULL, FALSE,
+ FALSE, NULL, NULL,
+ NULL, NULL, NULL, FALSE,
+ 'Fermeture des quais - déviation vers parkings périphériques', 'HNASRI', CURRENT_TIMESTAMP(), TRUE),
+
+-- Événement externe : Concert
+(3, 'Concert Arkéa Arena - Juillet', 7, 19, NULL,
+ 10, 3, '2025-07-05 18:00:00', '2025-07-05 23:59:00',
+ TRUE, 'Nuit',
+ FALSE, NULL, FALSE,
+ FALSE, NULL, NULL,
+ NULL, NULL, NULL, FALSE,
+ 'Affluence forte attendue - 15000 spectateurs', 'HNASRI', CURRENT_TIMESTAMP(), TRUE),
+
+-- Événement technique : Coupure internet
+(4, 'Coupure fibre Alsace Lorraine', 11, 30, NULL,
+ 1, 4, '2025-07-01 08:00:00', '2025-07-01 18:00:00',
+ FALSE, NULL,
+ FALSE, NULL, FALSE,
+ FALSE, NULL, NULL,
+ NULL, NULL, NULL, FALSE,
+ 'Intervention opérateur sur la fibre - TPE et barrières en mode dégradé', 'HNASRI', CURRENT_TIMESTAMP(), TRUE),
+
+-- Travaux internes avec phasage
+(5, 'Peinture sol Niveau -2 Victor Hugo', 13, 37, NULL,
+ 1, 6, '2025-07-01 00:00:00', '2025-09-30 23:59:00',
+ FALSE, NULL,
+ TRUE, 50, FALSE,
+ FALSE, NULL, NULL,
+ 'INTERNE', 'Jean Dupont - 06.12.34.56.78', NULL, TRUE,
+ 'Peinture sol sur 3 mois - phases de 2 semaines avec rotation des zones', 'HNASRI', CURRENT_TIMESTAMP(), TRUE),
+
+-- Travaux externes avec fermeture totale
+(6, 'Travaux voirie rue Bergonié', 14, 42, NULL,
+ 1, 7, '2025-08-01 00:00:00', '2025-08-15 23:59:00',
+ FALSE, NULL,
+ TRUE, NULL, TRUE,
+ TRUE, 1, 1,
+ 'EXTERNE', 'Marie Martin - 06.98.76.54.32', 'Eurovia - M. Robert - 05.56.12.34.56', FALSE,
+ 'Fermeture totale du parking Bergonié pendant les travaux de voirie', 'HNASRI', CURRENT_TIMESTAMP(), TRUE);
+
+-- Liaison événements <-> parkings
+INSERT INTO DB_REFERENTIEL_DEV.S_REFERENTIEL.T_EVENEMENT_PARC (CODE_EVENEMENT, CODE_PARC, NOM_PARC) VALUES
+(1, 74, 'GRAND PARC'),
+(1, 75, 'GRAND PARC Moto'),
+(2, 76, 'ALLEES de CHARTRES'),
+(2, 63, 'BEAUJON'),
+(3, 95, 'ARENA'),
+(4, 69, 'ALSACE LORRAINE'),
+(5, 68, 'VICTOR HUGO Etage'),
+(5, 169, 'VICTOR HUGO Sous-Sol'),
+(6, 60, 'BERGONIE');
+
+-- Phases de travaux pour l'événement 5 (Peinture sol Victor Hugo)
+INSERT INTO DB_REFERENTIEL_DEV.S_REFERENTIEL.T_PHASE_TRAVAUX
+(CODE_EVENEMENT, NUMERO_PHASE, DATE_DEBUT, DATE_FIN, NB_PLACES_IMPACTEES, COMMENTAIRE)
+VALUES
+(5, 2, '2025-07-15 00:00:00', '2025-07-31 23:59:00', 30, 'Zone A - Niveau -2 côté ascenseur'),
+(5, 3, '2025-08-01 00:00:00', '2025-08-15 23:59:00', 50, 'Zone B - Niveau -2 côté escalier'),
+(5, 4, '2025-08-16 00:00:00', '2025-08-31 23:59:00', 40, 'Zone C - Niveau -2 fond de parking'),
+(5, 5, '2025-09-01 00:00:00', '2025-09-15 23:59:00', 25, 'Zone D - Niveau -2 rampe accès'),
+(5, 6, '2025-09-16 00:00:00', '2025-09-30 23:59:00', 20, 'Finitions et marquages au sol');
+
+-- Historique (snapshots de création)
+INSERT INTO DB_REFERENTIEL_DEV.S_REFERENTIEL.T_HISTORIQUE_EVENEMENT
+(CODE_EVENEMENT, TITRE_EVENEMENT, TYPE_EVENEMENT, CATEGORIE, DESCRIPTION,
+ LIEU, VILLE, IMPACT, NIVEAU_SEVERITE, DATE_DEBUT, DATE_FIN,
+ IS_JOURNEE_PARTIELLE, CRENEAU, NB_PLACES_IMPACTEES, FERMETURE_TOTALE,
+ NB_PISTES_ENTREE_FERMEES, NB_PISTES_SORTIE_FERMEES,
+ TYPE_TRAVAUX, CONTACT_INTERNE, CONTACT_EXTERNE, IS_TRAVAUX_PHASES,
+ COMMENTAIRE, PARKINGS_IMPACTES, IS_ACTIVE, MODIFIE_PAR, ACTION, DATE_DEBUT_VALIDITE, DATE_FIN_VALIDITE)
+VALUES
+(1, 'Foire aux vins 2025', 'Foire', 'Externe', 'Foire aux vins',
+ 'Lac / Parc des expositions', 'Bordeaux', 'Surcharge temporaire', 2, '2025-06-25 09:00:00', '2025-06-29 20:00:00',
+ FALSE, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, FALSE,
+ 'Événement au Parc des Expositions - forte affluence parking Lac', 'GRAND PARC, GRAND PARC Moto', 1, 'HNASRI', 'CREATION', CURRENT_TIMESTAMP(), NULL),
+
+(2, 'Marathon de Bordeaux 2025', 'Marathon', 'Externe', 'Marathon de Bordeaux',
+ 'Quais de Bordeaux', 'Bordeaux', 'Déviation imposée', 3, '2025-06-22 06:00:00', '2025-06-22 16:00:00',
+ TRUE, 'Matin', NULL, FALSE, NULL, NULL, NULL, NULL, NULL, FALSE,
+ 'Fermeture des quais - déviation vers parkings périphériques', 'ALLEES de CHARTRES, BEAUJON', 1, 'HNASRI', 'CREATION', CURRENT_TIMESTAMP(), NULL),
+
+(3, 'Concert Arkéa Arena - Juillet', 'Concert / Spectacle', 'Externe', 'Concert Arkéa Arena',
+ 'Arena / Floirac', 'Floirac', 'Surcharge temporaire', 2, '2025-07-05 18:00:00', '2025-07-05 23:59:00',
+ TRUE, 'Nuit', NULL, FALSE, NULL, NULL, NULL, NULL, NULL, FALSE,
+ 'Affluence forte attendue - 15000 spectateurs', 'ARENA', 1, 'HNASRI', 'CREATION', CURRENT_TIMESTAMP(), NULL),
+
+(4, 'Coupure fibre Alsace Lorraine', 'Coupure internet', 'Technique', 'Coupure fibre',
+ 'Centre-ville', 'Bordeaux', 'Accès restreint', 3, '2025-07-01 08:00:00', '2025-07-01 18:00:00',
+ FALSE, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, FALSE,
+ 'Intervention opérateur sur la fibre - TPE et barrières en mode dégradé', 'ALSACE LORRAINE', 1, 'HNASRI', 'CREATION', CURRENT_TIMESTAMP(), NULL),
+
+(5, 'Peinture sol Niveau -2 Victor Hugo', 'Travaux internes', 'Technique', 'Peinture sol',
+ 'Centre-ville', 'Bordeaux', 'Fermeture partielle', 3, '2025-07-01 00:00:00', '2025-09-30 23:59:00',
+ FALSE, NULL, 50, FALSE, NULL, NULL, 'INTERNE', 'Jean Dupont - 06.12.34.56.78', NULL, TRUE,
+ 'Peinture sol sur 3 mois - phases de 2 semaines avec rotation des zones', 'VICTOR HUGO Etage, VICTOR HUGO Sous-Sol', 1, 'HNASRI', 'CREATION', CURRENT_TIMESTAMP(), NULL),
+
+(6, 'Travaux voirie rue Bergonié', 'Travaux externes', 'Technique', 'Travaux voirie',
+ 'Centre-ville', 'Bordeaux', 'Blocage total', 4, '2025-08-01 00:00:00', '2025-08-15 23:59:00',
+ FALSE, NULL, NULL, TRUE, 1, 1, 'EXTERNE', 'Marie Martin - 06.98.76.54.32', 'Eurovia - M. Robert - 05.56.12.34.56', FALSE,
+ 'Fermeture totale du parking Bergonié pendant les travaux de voirie', 'BERGONIE', 1, 'HNASRI', 'CREATION', CURRENT_TIMESTAMP(), NULL);
+
+-- Mise à jour de la séquence pour commencer après les données insérées
+ALTER SEQUENCE DB_REFERENTIEL_DEV.S_REFERENTIEL.SEQ_EVENEMENT SET START WITH 7;
