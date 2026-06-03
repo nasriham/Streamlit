@@ -1,88 +1,122 @@
 import streamlit as st
 import pandas as pd
 
-from core.queries import get_evenements_par_parking, get_stats_par_parking
+from core.queries import (
+    get_evenements_par_parking, get_stats_par_parking,
+    get_disponibilite_parkings, get_fait_disponibilite, recalculer_disponibilite
+)
 
 st.title("🚗 Impact par Parking")
-st.caption("Vue des événements impactant chaque parking MetPark — Taux d'occupation mis à jour automatiquement")
+st.caption("Vue des événements impactant chaque parking MetPark — Disponibilité calculée depuis la table de fait")
+
+# -- Bouton de rafraîchissement --
+if st.button("🔄 Recalculer la disponibilité", help="Recalcule la table de fait à partir des événements actifs"):
+    recalculer_disponibilite()
+    st.toast("Disponibilité recalculée !")
+    st.rerun()
 
 # -- Load data --
+df_dispo = get_disponibilite_parkings()
+df_fait = get_fait_disponibilite()
 df_events_parking = get_evenements_par_parking()
 df_stats = get_stats_par_parking()
 
-if df_stats.empty:
-    st.info("Aucun événement associé à un parking pour le moment.")
-    st.stop()
+# ===== SECTION 1 : DISPONIBILITE EN COURS =====
+st.subheader("📊 Disponibilité des parkings")
 
-# -- KPIs globaux --
-st.subheader("📊 Vue d'ensemble")
+# Toggle pour voir tout ou seulement en cours
+vue_complete = st.toggle("Inclure les événements à venir", value=True, help="Affiche tous les parkings impactés, pas seulement ceux avec un événement en cours")
 
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("Parkings impactés", len(df_stats))
-with col2:
-    st.metric("Événements actifs", df_events_parking["CODE_EVENEMENT"].nunique())
-with col3:
-    max_sev = df_stats["SEVERITE_MAX"].max() if not df_stats.empty else 0
-    st.metric("Sévérité max", f"{max_sev}/4")
-with col4:
-    total_places = df_stats["TOTAL_PLACES_IMPACTEES"].sum() if "TOTAL_PLACES_IMPACTEES" in df_stats.columns else 0
-    st.metric("Total places impactées", int(total_places))
+if vue_complete:
+    # Utiliser get_stats_par_parking qui montre tous les événements actifs
+    df_vue = df_stats.copy() if not df_stats.empty else pd.DataFrame()
+    if not df_vue.empty and "CAPACITE" in df_vue.columns and "TOTAL_PLACES_IMPACTEES" in df_vue.columns:
+        df_vue["TAUX_IMPACT"] = df_vue.apply(
+            lambda row: min(100, round((row["TOTAL_PLACES_IMPACTEES"] / row["CAPACITE"]) * 100, 1))
+            if pd.notna(row.get("CAPACITE")) and row["CAPACITE"] > 0 else 0,
+            axis=1
+        )
+        df_vue["PLACES_DISPONIBLES"] = df_vue.apply(
+            lambda row: max(0, int(row["CAPACITE"] - row["TOTAL_PLACES_IMPACTEES"]))
+            if pd.notna(row.get("CAPACITE")) else None,
+            axis=1
+        )
+else:
+    df_vue = df_dispo.copy() if not df_dispo.empty else pd.DataFrame()
+
+if df_vue.empty:
+    st.success("Aucun parking impacté." if not vue_complete else "Aucun événement associé à un parking.")
+else:
+    # KPIs
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Parkings impactés", len(df_vue))
+    with col2:
+        col_places = "TOTAL_PLACES_IMPACTEES" if "TOTAL_PLACES_IMPACTEES" in df_vue.columns else None
+        total_impactees = int(df_vue[col_places].sum()) if col_places else 0
+        st.metric("Places impactées", total_impactees)
+    with col3:
+        col_dispo = "PLACES_DISPONIBLES" if "PLACES_DISPONIBLES" in df_vue.columns else None
+        total_dispo = int(df_vue[col_dispo].sum()) if col_dispo else 0
+        st.metric("Places disponibles", total_dispo)
+    with col4:
+        if "FERMETURE_TOTALE" in df_vue.columns:
+            nb_fermetures = int(df_vue["FERMETURE_TOTALE"].sum())
+        else:
+            nb_fermetures = 0
+        st.metric("Fermetures totales", nb_fermetures)
+
+    # Alertes fermetures totales
+    if "FERMETURE_TOTALE" in df_vue.columns:
+        df_ferme = df_vue[df_vue["FERMETURE_TOTALE"] == True]
+        if not df_ferme.empty:
+            for _, row in df_ferme.iterrows():
+                parc = row.get('NOM_PARC', row.get('PARKING', ''))
+                cap = int(row.get('CAPACITE_EXPLOITEE', row.get('CAPACITE', 0))) if pd.notna(row.get('CAPACITE_EXPLOITEE', row.get('CAPACITE'))) else '?'
+                st.error(f"🚫 **{parc}** — Fermeture totale ({cap} places indisponibles)")
+
+    st.markdown("---")
+
+    # Tableau de disponibilité / classement
+    titre_section = "🏆 Classement par taux d'impact" + (" (tous événements)" if vue_complete else " (en cours uniquement)")
+    st.subheader(titre_section)
+
+    if vue_complete:
+        st.dataframe(df_vue, use_container_width=True, hide_index=True,
+            column_config={
+                "PARKING": st.column_config.TextColumn("Parking"),
+                "CAPACITE": st.column_config.NumberColumn("Capacité", format="%d"),
+                "NB_EVENEMENTS": st.column_config.NumberColumn("Nb événements", format="%d"),
+                "SEVERITE_MAX": st.column_config.NumberColumn("Sévérité max", format="%d ⚠️"),
+                "TOTAL_PLACES_IMPACTEES": st.column_config.NumberColumn("Places impactées", format="%d"),
+                "PLACES_DISPONIBLES": st.column_config.NumberColumn("Places disponibles", format="%d"),
+                "TAUX_IMPACT": st.column_config.ProgressColumn("Taux d'impact", format="%.1f%%", min_value=0, max_value=100),
+                "PREMIER_EVENEMENT": st.column_config.DatetimeColumn("Premier événement", format="DD/MM/YYYY"),
+                "DERNIER_EVENEMENT": st.column_config.DatetimeColumn("Dernier événement", format="DD/MM/YYYY"),
+            })
+    else:
+        st.dataframe(df_vue, use_container_width=True, hide_index=True,
+            column_config={
+                "CODE_PARC": st.column_config.TextColumn("Code"),
+                "NOM_PARC": st.column_config.TextColumn("Parking"),
+                "CAPACITE_EXPLOITEE": st.column_config.NumberColumn("Capacité exploitée", format="%d"),
+                "TOTAL_PLACES_IMPACTEES": st.column_config.NumberColumn("Places impactées", format="%d"),
+                "PLACES_DISPONIBLES": st.column_config.NumberColumn("Places disponibles", format="%d"),
+                "TAUX_IMPACT": st.column_config.ProgressColumn("Taux d'impact", format="%.1f%%", min_value=0, max_value=100),
+                "NB_EVENEMENTS_EN_COURS": st.column_config.NumberColumn("Nb événements"),
+                "FERMETURE_TOTALE": st.column_config.CheckboxColumn("Fermé"),
+            })
+
+    # Chart
+    if "TAUX_IMPACT" in df_vue.columns:
+        col_parking = "NOM_PARC" if "NOM_PARC" in df_vue.columns else "PARKING"
+        if col_parking in df_vue.columns:
+            st.bar_chart(df_vue.set_index(col_parking)["TAUX_IMPACT"])
 
 st.markdown("---")
 
-# -- Classement des parkings avec taux d'occupation --
-st.subheader("🏆 Classement par impact")
-
-# Calculer le taux d'occupation impacté
-df_display_stats = df_stats.copy()
-if "CAPACITE" in df_display_stats.columns and "TOTAL_PLACES_IMPACTEES" in df_display_stats.columns:
-    df_display_stats["TAUX_IMPACT"] = df_display_stats.apply(
-        lambda row: min(100, round((row["TOTAL_PLACES_IMPACTEES"] / row["CAPACITE"]) * 100, 1))
-        if pd.notna(row.get("CAPACITE")) and row["CAPACITE"] > 0 else 0,
-        axis=1
-    )
-    df_display_stats["PLACES_DISPONIBLES"] = df_display_stats.apply(
-        lambda row: max(0, int(row["CAPACITE"] - row["TOTAL_PLACES_IMPACTEES"]))
-        if pd.notna(row.get("CAPACITE")) else None,
-        axis=1
-    )
-
-st.dataframe(df_display_stats, use_container_width=True, hide_index=True,
-    column_config={
-        "PARKING": st.column_config.TextColumn("Parking"),
-        "CAPACITE": st.column_config.NumberColumn("Capacité", format="%d"),
-        "NB_EVENEMENTS": st.column_config.NumberColumn("Nb événements", format="%d"),
-        "SEVERITE_MAX": st.column_config.NumberColumn("Sévérité max", format="%d ⚠️"),
-        "TOTAL_PLACES_IMPACTEES": st.column_config.NumberColumn("Places impactées", format="%d"),
-        "PLACES_DISPONIBLES": st.column_config.NumberColumn("Places disponibles", format="%d"),
-        "TAUX_IMPACT": st.column_config.ProgressColumn("Taux d'impact", format="%.1f%%", min_value=0, max_value=100),
-        "PREMIER_EVENEMENT": st.column_config.DatetimeColumn("Premier événement", format="DD/MM/YYYY"),
-        "DERNIER_EVENEMENT": st.column_config.DatetimeColumn("Dernier événement", format="DD/MM/YYYY"),
-    })
-
-# Bar chart
-if not df_display_stats.empty:
-    st.bar_chart(df_display_stats.set_index("PARKING")["NB_EVENEMENTS"])
-
-# Chart taux d'impact
-if "TAUX_IMPACT" in df_display_stats.columns:
-    st.subheader("📈 Taux d'impact par parking")
-    st.bar_chart(df_display_stats.set_index("PARKING")["TAUX_IMPACT"])
-
-st.markdown("---")
-
-# -- Alertes fermetures totales --
-if not df_events_parking.empty and "FERMETURE_TOTALE" in df_events_parking.columns:
-    df_fermetures = df_events_parking[df_events_parking["FERMETURE_TOTALE"] == True]
-    if not df_fermetures.empty:
-        st.subheader("🚫 Fermetures totales en cours")
-        for _, row in df_fermetures.iterrows():
-            st.error(f"**{row['PARKING']}** — {row['TITRE_EVENEMENT']} (du {row['DATE_DEBUT']} au {row['DATE_FIN'] if pd.notna(row['DATE_FIN']) else '?'})")
-        st.markdown("---")
-
-# -- Detail par parking --
-st.subheader("📋 Détail par parking")
+# ===== SECTION 2 : DETAIL PAR PARKING =====
+st.subheader("🔍 Détail par parking")
 
 if not df_events_parking.empty:
     parkings_list = sorted(df_events_parking["PARKING"].dropna().unique().tolist())
@@ -120,3 +154,23 @@ if not df_events_parking.empty:
             "NB_PLACES_IMPACTEES": st.column_config.NumberColumn("Places impactées"),
             "FERMETURE_TOTALE": st.column_config.CheckboxColumn("Fermeture totale"),
         })
+
+st.markdown("---")
+
+# ===== SECTION 3 : DETAIL DISPONIBILITE (filtré par parking sélectionné) =====
+with st.expander("📄 Détail disponibilité par événement"):
+    if df_fait.empty:
+        st.info("Aucune donnée de disponibilité.")
+    else:
+        # Filtrer par le parking sélectionné au-dessus
+        if selected_parking and selected_parking != "Tous":
+            df_fait_display = df_fait[df_fait["NOM_PARC"] == selected_parking]
+            st.caption(f"{len(df_fait_display)} ligne(s) — Filtré sur **{selected_parking}**")
+        else:
+            df_fait_display = df_fait
+            st.caption(f"{len(df_fait_display)} ligne(s) — Tous les parkings")
+
+        if df_fait_display.empty:
+            st.info(f"Aucune donnée de disponibilité pour {selected_parking}.")
+        else:
+            st.dataframe(df_fait_display, use_container_width=True, hide_index=True)
