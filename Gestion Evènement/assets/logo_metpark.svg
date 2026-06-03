@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 260" width="200" height="260">
+  <rect width="200" height="260" fill="#000000"/>
+  <circle cx="100" cy="100" r="65" fill="#E8692A"/>
+  <text x="100" y="88" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">MT</text>
+  <text x="100" y="120" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">PK</text>
+  <text x="100" y="220" font-family="Arial, sans-serif" font-size="18" letter-spacing="8" fill="#FFFFFF" text-anchor="middle">MET</text>
+  <text x="100" y="220" font-family="Arial, sans-serif" font-size="18" letter-spacing="8" fill="#E8692A" text-anchor="middle" dx="36">PARK</text>
+  <text x="100" y="220" font-family="Arial, sans-serif" font-size="18" fill="#FFFFFF" text-anchor="middle" letter-spacing="8">MET</text>
+  <text x="142" y="220" font-family="Arial, sans-serif" font-size="18" fill="#E8692A" letter-spacing="8">PARK</text>
+</svg>
