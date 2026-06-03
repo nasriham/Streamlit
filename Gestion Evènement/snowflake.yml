@@ -22,4 +22,5 @@ entities:
       - pages/evenements_externes.py
       - pages/evenements_techniques.py
       - pages/occupation_parking.py
+      - pages/travaux.py
       - assets/logo_metpark.svg
