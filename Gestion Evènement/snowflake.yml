@@ -9,8 +9,6 @@ entities:
       name: GESTION_EVENEMENTS
     title: gestion-evenements
     query_warehouse: WH_HORS_PRODUCTION
-    compute_pool: SYSTEM_COMPUTE_POOL_CPU
-    run_mode: SpcsOnly
     execute_as: OWNER
     main_file: streamlit_app.py
     artifacts:
