@@ -26,8 +26,8 @@ st.caption(f"Travaux internes et externes impactant les parcs — Connecté : **
 show_notification()
 
 # -- Tabs --
-tab_search, tab_create, tab_edit, tab_delete = st.tabs([
-    "🔍 Rechercher", "➕ Créer", "✏️ Modifier / Phases", "🗑️ Supprimer"
+tab_search, tab_create, tab_edit, tab_delete, tab_history = st.tabs([
+    "🔍 Rechercher", "➕ Créer", "✏️ Modifier / Phases", "🗑️ Supprimer", "📜 Historique"
 ])
 
 # Filtrer uniquement les événements travaux
@@ -46,6 +46,17 @@ with tab_search:
     if df_travaux.empty:
         st.info("Aucun travaux en cours.")
     else:
+        # Pour les travaux phasés, calculer le total des places par phase
+        df_all_ph = get_all_phases_travaux()
+        if not df_all_ph.empty and "NB_PLACES_IMPACTEES" in df_all_ph.columns:
+            phases_sum = df_all_ph.groupby("CODE_EVENEMENT")["NB_PLACES_IMPACTEES"].sum().reset_index()
+            phases_sum.columns = ["CODE_EVENEMENT", "PLACES_PHASES"]
+            df_travaux = df_travaux.merge(phases_sum, on="CODE_EVENEMENT", how="left")
+            # Remplir NB_PLACES_IMPACTEES avec le total des phases si NULL et phasé
+            mask = df_travaux["IS_TRAVAUX_PHASES"] == True
+            df_travaux.loc[mask & df_travaux["NB_PLACES_IMPACTEES"].isna(), "NB_PLACES_IMPACTEES"] = df_travaux.loc[mask & df_travaux["NB_PLACES_IMPACTEES"].isna(), "PLACES_PHASES"]
+            df_travaux = df_travaux.drop(columns=["PLACES_PHASES"], errors="ignore")
+
         st.caption(f"{len(df_travaux)} travaux actif(s)")
         display_cols = ["CODE_EVENEMENT", "TITRE_EVENEMENT", "TYPE_EVENEMENT",
                         "TYPE_TRAVAUX", "CONTACT_INTERNE", "CONTACT_EXTERNE",
@@ -94,6 +105,8 @@ with tab_search:
                 st.markdown(f"**Contact externe :** {evt['CONTACT_EXTERNE'] if pd.notna(evt.get('CONTACT_EXTERNE')) else '-'}")
             with col2:
                 st.markdown(f"**Fin :** {evt['DATE_FIN'] if pd.notna(evt['DATE_FIN']) else '-'}")
+                places_val = int(evt['NB_PLACES_IMPACTEES']) if pd.notna(evt.get('NB_PLACES_IMPACTEES')) else '-'
+                st.markdown(f"**Places impactées :** {places_val}")
                 if evt.get('FERMETURE_TOTALE'):
                     st.error("🚫 FERMETURE TOTALE")
 
@@ -241,9 +254,30 @@ with tab_search:
                                 "Début": pd.to_datetime(row["DATE_DEBUT"]).isoformat(),
                                 "Fin": pd.to_datetime(row["DATE_FIN"]).isoformat(),
                                 "Parking": parc_name,
-                                "Catégorie": parc_name,
+                                "Catégorie": "Global",
                                 "Places": int(row["NB_PLACES_IMPACTEES"]) if pd.notna(row.get("NB_PLACES_IMPACTEES")) else 0,
                             })
+
+                        # Ajouter les phases si phasé
+                        if row.get("IS_TRAVAUX_PHASES"):
+                            df_ph = get_phases_travaux(int(row["CODE_EVENEMENT"]))
+                            if not df_ph.empty:
+                                for _, phase in df_ph.iterrows():
+                                    if pd.notna(phase["DATE_DEBUT"]) and pd.notna(phase["DATE_FIN"]):
+                                        commentaire = phase.get('COMMENTAIRE', '') or ''
+                                        parts = [f"↳ Phase {int(phase['NUMERO_PHASE'])}"]
+                                        if commentaire:
+                                            parts.append(f"— {commentaire}")
+                                        label = "  " + " ".join(parts)
+                                        for parc_name in parkings_list:
+                                            gantt_externes.append({
+                                                "Tâche": label,
+                                                "Début": pd.to_datetime(phase["DATE_DEBUT"]).isoformat(),
+                                                "Fin": pd.to_datetime(phase["DATE_FIN"]).isoformat(),
+                                                "Parking": parc_name,
+                                                "Catégorie": "Phase",
+                                                "Places": int(phase["NB_PLACES_IMPACTEES"]) if pd.notna(phase.get("NB_PLACES_IMPACTEES")) else 0,
+                                            })
 
                 if gantt_externes:
                     df_gantt_ext = pd.DataFrame(gantt_externes)
@@ -263,10 +297,10 @@ with tab_search:
                             },
                             "x2": {"field": "Fin", "type": "temporal"},
                             "color": {
-                                "field": "Parking",
+                                "field": "Catégorie",
                                 "type": "nominal",
-                                "scale": {"range": ["#3b82f6", "#f59e0b", "#10b981", "#8b5cf6", "#ec4899", "#06b6d4"]},
-                                "legend": {"title": "Parkings impactés"}
+                                "scale": {"domain": ["Global", "Phase"], "range": ["#3b82f6", "#f59e0b"]},
+                                "legend": {"title": ""}
                             },
                             "tooltip": [
                                 {"field": "Tâche", "type": "nominal"},
@@ -277,7 +311,7 @@ with tab_search:
                             ]
                         },
                         "height": max(150, len(gantt_externes) * 30),
-                        "title": "Impact multi-parkings"
+                        "title": "Travaux externes — Impact multi-parkings (avec phases)"
                     }, use_container_width=True)
                 else:
                     st.info("Aucun travaux externe avec dates complètes.")
@@ -400,12 +434,11 @@ with tab_create:
         key=f"trav_phases_cb_{v}"
     )
 
-    # Si phasé, forcer fermeture_totale = False et ignorer nb_places global
+    # Si phasé, ignorer nb_places global (mais garder fermeture_totale)
     if is_travaux_phases:
-        fermeture_totale = False
         nb_places_impactees = None
-        if is_places_impactees:
-            st.warning("⚠️ Pour les travaux phasés, les places impactées sont définies par phase (ci-dessous). Le nombre global et la fermeture totale sont ignorés.")
+        if is_places_impactees and not fermeture_totale:
+            st.warning("⚠️ Pour les travaux phasés, les places impactées sont définies par phase (ci-dessous). Le nombre global est ignoré.")
 
     # Gestion dynamique des phases dans session_state
     if is_travaux_phases:
@@ -449,12 +482,16 @@ with tab_create:
                     )
                     st.session_state["phases_list"][i]["date_fin"] = p_df
                 with col3:
-                    p_pl = st.number_input(
-                        f"Places phase {phase['numero']}",
-                        min_value=0, value=phase.get("nb_places", 0),
-                        key=f"phase_pl_{i}"
-                    )
-                    st.session_state["phases_list"][i]["nb_places"] = p_pl
+                    if not fermeture_totale:
+                        p_pl = st.number_input(
+                            f"Places phase {phase['numero']}",
+                            min_value=0, value=phase.get("nb_places", 0),
+                            key=f"phase_pl_{i}"
+                        )
+                        st.session_state["phases_list"][i]["nb_places"] = p_pl
+                    else:
+                        st.caption("🚫 Fermé")
+                        st.session_state["phases_list"][i]["nb_places"] = 0
 
                 p_comm = st.text_input(
                     f"Secteur impacté phase {phase['numero']}",
@@ -619,45 +656,61 @@ with tab_edit:
                             st.markdown(f"**Parkings :** {', '.join(df_parcs['NOM_PARC'].tolist())}")
 
                 # Modification rapide
-                with st.form(f"form_edit_trav_{code_edit}"):
-                    new_titre = st.text_input("Titre", placeholder="Laisser vide pour conserver")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        new_date_debut = st.date_input("Date de début", value=None, key="trav_e_dd")
-                        new_contact_interne = st.text_input("Contact interne", placeholder="Laisser vide pour conserver")
-                    with col2:
-                        new_date_fin = st.date_input("Date de fin", value=None, key="trav_e_df")
-                        new_contact_externe = st.text_input("Contact externe", placeholder="Laisser vide pour conserver")
+                new_titre = st.text_input("Titre", placeholder="Laisser vide pour conserver", key=f"trav_edit_titre_{code_edit}")
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_date_debut = st.date_input("Date de début", value=None, key=f"trav_e_dd_{code_edit}")
+                    new_contact_interne = st.text_input("Contact interne", placeholder="Laisser vide pour conserver", key=f"trav_edit_ci_{code_edit}")
+                with col2:
+                    new_date_fin = st.date_input("Date de fin", value=None, key=f"trav_e_df_{code_edit}")
+                    new_contact_externe = st.text_input("Contact externe", placeholder="Laisser vide pour conserver", key=f"trav_edit_ce_{code_edit}")
 
-                    new_nb_places = st.number_input("Nb places impactées (0 = ne pas modifier)", min_value=0, value=0)
-                    new_commentaire = st.text_input("Commentaire", placeholder="Laisser vide pour conserver")
+                new_fermeture = st.checkbox(
+                    "🚫 Fermeture totale",
+                    value=bool(evt_row.get('FERMETURE_TOTALE')),
+                    key=f"trav_edit_ferm_{code_edit}"
+                )
+                if not new_fermeture:
+                    new_nb_places = st.number_input("Nb places impactées (0 = ne pas modifier)", min_value=0, value=0, key=f"trav_edit_pl_{code_edit}")
+                else:
+                    st.info("🚫 Fermeture totale : les places impactées = capacité totale du parking.")
+                    new_nb_places = 0
 
-                    if st.form_submit_button("💾 Enregistrer modifications"):
-                        set_parts = []
-                        if new_titre.strip():
-                            set_parts.append(f"TITRE_EVENEMENT = '{new_titre.replace(chr(39), chr(39)+chr(39))}'")
-                        if new_date_debut:
-                            set_parts.append(f"DATE_DEBUT = '{new_date_debut} 00:00:00'")
-                        if new_date_fin:
-                            set_parts.append(f"DATE_FIN = '{new_date_fin} 23:59:00'")
-                        if new_contact_interne.strip():
-                            set_parts.append(f"CONTACT_INTERNE = '{new_contact_interne.replace(chr(39), chr(39)+chr(39))}'")
-                        if new_contact_externe.strip():
-                            set_parts.append(f"CONTACT_EXTERNE = '{new_contact_externe.replace(chr(39), chr(39)+chr(39))}'")
-                        if new_nb_places > 0:
-                            set_parts.append(f"NB_PLACES_IMPACTEES = {new_nb_places}")
-                            set_parts.append("IS_PLACES_IMPACTEES = TRUE")
-                        if new_commentaire.strip():
-                            set_parts.append(f"COMMENTAIRE = '{new_commentaire.replace(chr(39), chr(39)+chr(39))}'")
+                new_commentaire = st.text_input("Commentaire", placeholder="Laisser vide pour conserver", key=f"trav_edit_comm_{code_edit}")
 
-                        if set_parts:
-                            update_evenement(code_edit, set_parts, sf_user)
-                            log_modification(code_edit, "MODIFICATION", sf_user)
-                            recalculer_disponibilite()
-                            notify("✏️ Travaux modifiés")
-                            st.rerun()
-                        else:
-                            st.info("Aucune modification.")
+                st.markdown("---")
+                if st.button("💾 Enregistrer modifications", type="primary", key=f"btn_edit_trav_{code_edit}"):
+                    set_parts = []
+                    if new_titre.strip():
+                        set_parts.append(f"TITRE_EVENEMENT = '{new_titre.replace(chr(39), chr(39)+chr(39))}'")
+                    if new_date_debut:
+                        set_parts.append(f"DATE_DEBUT = '{new_date_debut} 00:00:00'")
+                    if new_date_fin:
+                        set_parts.append(f"DATE_FIN = '{new_date_fin} 23:59:00'")
+                    if new_contact_interne.strip():
+                        set_parts.append(f"CONTACT_INTERNE = '{new_contact_interne.replace(chr(39), chr(39)+chr(39))}'")
+                    if new_contact_externe.strip():
+                        set_parts.append(f"CONTACT_EXTERNE = '{new_contact_externe.replace(chr(39), chr(39)+chr(39))}'")
+                    if new_fermeture:
+                        set_parts.append("FERMETURE_TOTALE = TRUE")
+                        set_parts.append("IS_PLACES_IMPACTEES = TRUE")
+                        set_parts.append("NB_PLACES_IMPACTEES = NULL")
+                    elif not new_fermeture and bool(evt_row.get('FERMETURE_TOTALE')):
+                        set_parts.append("FERMETURE_TOTALE = FALSE")
+                    if not new_fermeture and new_nb_places > 0:
+                        set_parts.append(f"NB_PLACES_IMPACTEES = {new_nb_places}")
+                        set_parts.append("IS_PLACES_IMPACTEES = TRUE")
+                    if new_commentaire.strip():
+                        set_parts.append(f"COMMENTAIRE = '{new_commentaire.replace(chr(39), chr(39)+chr(39))}'")
+
+                    if set_parts:
+                        update_evenement(code_edit, set_parts, sf_user)
+                        log_modification(code_edit, "MODIFICATION", sf_user)
+                        recalculer_disponibilite()
+                        notify("✏️ Travaux modifiés")
+                        st.rerun()
+                    else:
+                        st.info("Aucune modification.")
 
                 # -- SECTION PHASES --
                 st.markdown("---")
@@ -692,7 +745,11 @@ with tab_edit:
                                 col1, col2 = st.columns(2)
                                 with col1:
                                     edit_dd = st.date_input("Début", value=pd.to_datetime(phase_row['DATE_DEBUT']).date() if pd.notna(phase_row['DATE_DEBUT']) else None, key=f"edit_ph_trav_dd_{code_ph}")
-                                    edit_places = st.number_input("Places impactées", min_value=0, value=int(phase_row['NB_PLACES_IMPACTEES']) if pd.notna(phase_row.get('NB_PLACES_IMPACTEES')) else 0, key=f"edit_ph_trav_pl_{code_ph}")
+                                    if not evt_row.get('FERMETURE_TOTALE'):
+                                        edit_places = st.number_input("Places impactées", min_value=0, value=int(phase_row['NB_PLACES_IMPACTEES']) if pd.notna(phase_row.get('NB_PLACES_IMPACTEES')) else 0, key=f"edit_ph_trav_pl_{code_ph}")
+                                    else:
+                                        st.info("🚫 Fermeture totale — places = capacité")
+                                        edit_places = 0
                                 with col2:
                                     edit_df = st.date_input("Fin", value=pd.to_datetime(phase_row['DATE_FIN']).date() if pd.notna(phase_row['DATE_FIN']) else None, key=f"edit_ph_trav_df_{code_ph}")
                                     edit_comm = st.text_input("Secteur", value=phase_row.get('COMMENTAIRE', '') or '', key=f"edit_ph_trav_co_{code_ph}")
@@ -731,7 +788,9 @@ with tab_edit:
                 with col2:
                     ph_df = st.date_input("Fin de la phase", value=None, key=f"ph_add_df_{code_edit}")
 
-                ph_places = st.number_input("Nb places impactées cette phase", min_value=0, value=0, key=f"ph_add_pl_{code_edit}")
+                ph_places = st.number_input("Nb places impactées cette phase", min_value=0, value=0, key=f"ph_add_pl_{code_edit}") if not evt_row.get('FERMETURE_TOTALE') else 0
+                if evt_row.get('FERMETURE_TOTALE'):
+                    st.info("🚫 Fermeture totale — places = capacité")
                 ph_comm = st.text_input("Secteur du parking impacté", placeholder="Ex: Niveau -2 zone A, Rampe nord...", key=f"ph_add_co_{code_edit}")
 
                 if st.button("➕ Ajouter la phase", key=f"btn_add_ph_{code_edit}"):
@@ -780,3 +839,54 @@ with tab_delete:
                 recalculer_disponibilite()
                 notify("🗑️ Travaux supprimés")
                 st.rerun()
+
+
+# ===== TAB: HISTORIQUE =====
+with tab_history:
+    st.subheader("Historique des travaux")
+    df_hist = get_historique_complet()
+    if df_hist.empty:
+        st.info("Aucun historique.")
+    else:
+        # Filtrer sur les travaux
+        df_hist_trav = df_hist[df_hist["TYPE_EVENEMENT"].str.contains("Travaux", na=False)] if "TYPE_EVENEMENT" in df_hist.columns else df_hist
+        if df_hist_trav.empty:
+            st.info("Aucun historique pour les travaux.")
+        else:
+            st.caption(f"{len(df_hist_trav)} entrée(s)")
+            st.dataframe(df_hist_trav, use_container_width=True, hide_index=True,
+                column_config={
+                    "CODE_EVENEMENT": st.column_config.NumberColumn("ID", width="small"),
+                    "TITRE_EVENEMENT": st.column_config.TextColumn("Titre"),
+                    "TYPE_EVENEMENT": st.column_config.TextColumn("Type"),
+                    "NB_PLACES_IMPACTEES": st.column_config.NumberColumn("Places"),
+                    "FERMETURE_TOTALE": st.column_config.CheckboxColumn("Fermé"),
+                    "PARKINGS_IMPACTES": st.column_config.TextColumn("Parkings"),
+                    "DATE_DEBUT": st.column_config.DatetimeColumn("Début", format="DD/MM/YYYY"),
+                    "DATE_FIN": st.column_config.DatetimeColumn("Fin", format="DD/MM/YYYY"),
+                    "MODIFIE_PAR": st.column_config.TextColumn("Par"),
+                    "ACTION": st.column_config.TextColumn("Action"),
+                    "DATE_DEBUT_VALIDITE": st.column_config.DatetimeColumn("Date modif", format="DD/MM/YYYY HH:mm"),
+                })
+
+            # Historique par phase
+            st.markdown("---")
+            st.subheader("📋 Détail des phases")
+            df_all_phases = get_all_phases_travaux()
+            if not df_all_phases.empty:
+                codes_trav = df_hist_trav["CODE_EVENEMENT"].unique().tolist()
+                df_phases_trav = df_all_phases[df_all_phases["CODE_EVENEMENT"].isin(codes_trav)]
+                if not df_phases_trav.empty:
+                    st.dataframe(df_phases_trav, use_container_width=True, hide_index=True,
+                        column_config={
+                            "CODE_EVENEMENT": st.column_config.NumberColumn("ID événement", width="small"),
+                            "NUMERO_PHASE": st.column_config.NumberColumn("Phase"),
+                            "DATE_DEBUT": st.column_config.DatetimeColumn("Début", format="DD/MM/YYYY"),
+                            "DATE_FIN": st.column_config.DatetimeColumn("Fin", format="DD/MM/YYYY"),
+                            "NB_PLACES_IMPACTEES": st.column_config.NumberColumn("Places impactées"),
+                            "COMMENTAIRE": st.column_config.TextColumn("Secteur"),
+                        })
+                else:
+                    st.info("Aucune phase de travaux.")
+            else:
+                st.info("Aucune phase de travaux enregistrée.")
