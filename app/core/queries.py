@@ -10,56 +10,56 @@ def get_villes():
     return session.sql("""
        SELECT CODE_VILLE,
               CODE_POSTAL || ' - ' || LIBELLE_VILLE AS LIBELLE_VILLE   
-        FROM S_REFERENTIEL.T_DIM_VILLE
+        FROM S_REFERENTIEL.T_R_VILLE
     """).to_pandas()
 
 def get_secteurs():
     return session.sql("""
         SELECT CODE_SECTEUR,
                LIBELLE_SECTEUR   
-        FROM S_REFERENTIEL.T_DIM_SECTEUR
+        FROM S_REFERENTIEL.T_R_SECTEUR
     """).to_pandas()
 
 def get_districts():
     return session.sql("""
         SELECT CODE_DISTRICT,
                LIBELLE_DISTRICT   
-        FROM S_REFERENTIEL.T_DIM_DISTRICT
+        FROM S_REFERENTIEL.T_R_DISTRICT
     """).to_pandas()
 
 def get_type():
     return session.sql("""
         SELECT CODE_TYPE_PARC,
                LIBELLE_TYPE_PARC  
-        FROM S_REFERENTIEL.T_DIM_TYPE_PARC
+        FROM S_REFERENTIEL.T_R_TYPE_PARC
     """).to_pandas()
 
 def get_gestion():
     return session.sql("""
         SELECT CODE_GESTION,
                LIBELLE_GESTION  
-        FROM S_REFERENTIEL.T_DIM_GESTION
+        FROM S_REFERENTIEL.T_R_GESTION
     """).to_pandas()
 
 def get_peageur():
     return session.sql("""
         SELECT CODE_PEAGEUR,
                LIBELLE_PEAGEUR  
-        FROM S_REFERENTIEL.T_DIM_PEAGEUR
+        FROM S_REFERENTIEL.T_R_PEAGEUR
     """).to_pandas()
 
 def get_flag():
     return session.sql("""
         SELECT CODE_FLAG,
                LIBELLE_FLAG  
-        FROM S_REFERENTIEL.T_DIM_FLAG
+        FROM S_REFERENTIEL.T_R_FLAG
     """).to_pandas()
 
 def get_nature_juridique():
     return session.sql("""
         SELECT CODE_NATURE_JURIDIQUE,
                LIBELLE_NATURE_JURIDIQUE  
-        FROM S_REFERENTIEL.T_DIM_NATURE_JURIDIQUE
+        FROM S_REFERENTIEL.T_R_NATURE_JURIDIQUE
     """).to_pandas()
     
 def get_parks():
@@ -86,14 +86,14 @@ def get_parks():
             DATE_DEBUT,
             DATE_FIN,
             IS_ACTIVE
-        FROM S_REFERENTIEL.T_DIM_PARC
+        FROM S_REFERENTIEL.T_R_PARC
         WHERE IS_ACTIVE = 'TRUE'
     """).to_pandas()
 
 def get_parks_exploit():
     return session.sql("""
         SELECT *
-        FROM S_REFERENTIEL.T_DIM_PARC_EXPLOITATION
+        FROM S_REFERENTIEL.T_R_PARC_EXPLOITATION
         WHERE IS_ACTIVE = TRUE
     """).to_pandas()
 
@@ -110,7 +110,7 @@ def get_parks_commercial():
             DATE_DEBUT,
             DATE_FIN,
             IS_ACTIVE
-        FROM S_REFERENTIEL.T_DIM_PARC_COMMERCIAL
+        FROM S_REFERENTIEL.T_R_PARC_COMMERCIAL
         WHERE IS_ACTIVE = TRUE
         ORDER BY CODE_PARC
     """).to_pandas()
@@ -128,7 +128,7 @@ def get_parks_juridique():
         DATE_DEBUT,
         DATE_FIN,
         IS_ACTIVE
-        FROM S_REFERENTIEL.T_DIM_PARC_JURIDIQUE
+        FROM S_REFERENTIEL.T_R_PARC_JURIDIQUE
         WHERE IS_ACTIVE = TRUE
         ORDER BY CODE_PARC
     """).to_pandas()
@@ -155,7 +155,7 @@ def get_parks_incendie():
             DATE_DEBUT,
             DATE_FIN,
             IS_ACTIVE
-        FROM S_REFERENTIEL.T_DIM_PARC_SECURITE_INCENDIE
+        FROM S_REFERENTIEL.T_R_PARC_SECURITE_INCENDIE
         WHERE IS_ACTIVE = TRUE
     """).to_pandas()
 
@@ -175,14 +175,14 @@ def get_parks_divers():
             DATE_DEBUT,
             DATE_FIN,
             IS_ACTIVE
-        FROM S_REFERENTIEL.T_DIM_PARC_DIVERS
+        FROM S_REFERENTIEL.T_R_PARC_DIVERS
         WHERE IS_ACTIVE = TRUE
     """).to_pandas()
     
 # CREATE
 def insert_park(row):
     session.sql("""
-        INSERT INTO S_REFERENTIEL.T_DIM_PARC (
+        INSERT INTO S_REFERENTIEL.T_R_PARC (
             CODE_PARC,
             NOM_PARC,
             ADRESSE_PARC,
@@ -236,7 +236,7 @@ def insert_park(row):
 
 def insert_exploit(row: dict, user: str):
     session.sql("""
-        INSERT INTO S_REFERENTIEL.T_DIM_PARC_EXPLOITATION (
+        INSERT INTO S_REFERENTIEL.T_R_PARC_EXPLOITATION (
             CODE_PARC,
             NB_CAPACITE_TOTALE,
             NB_CAPACITE_EXPLOITEE,
@@ -323,7 +323,7 @@ def insert_exploit(row: dict, user: str):
 
 def insert_park_commercial(row, user):
     session.sql("""
-        INSERT INTO S_REFERENTIEL.T_DIM_PARC_COMMERCIAL (
+        INSERT INTO S_REFERENTIEL.T_R_PARC_COMMERCIAL (
             CODE_PARC,
             CODE_FLAG_HORAIRES,
             CODE_FLAG_ABONNES,
@@ -359,7 +359,7 @@ def insert_park_commercial(row, user):
 
 def insert_park_juridique(row, user):
     session.sql("""
-        INSERT INTO S_REFERENTIEL.T_DIM_PARC_JURIDIQUE (
+        INSERT INTO S_REFERENTIEL.T_R_PARC_JURIDIQUE (
             CODE_PARC,
             MISE_EN_SERVICE,
             CODE_NATURE_JURIDIQUE,
@@ -396,7 +396,7 @@ def insert_park_juridique(row, user):
 def insert_incendie(row: dict, user: str):
 
     session.sql("""
-        INSERT INTO S_REFERENTIEL.T_DIM_PARC_SECURITE_INCENDIE (
+        INSERT INTO S_REFERENTIEL.T_R_PARC_SECURITE_INCENDIE (
             CODE_PARC,
             EAE_SPRINKLEURS,
             NB_POSTES,
@@ -457,7 +457,7 @@ def insert_incendie(row: dict, user: str):
 def insert_park_divers(row: dict, user: str):
 
     session.sql("""
-        INSERT INTO S_REFERENTIEL.T_DIM_PARC_DIVERS (
+        INSERT INTO S_REFERENTIEL.T_R_PARC_DIVERS (
             CODE_PARC,
             GABARIT_STANDARD,
             CODE_FLAG_PRESENCE_HUMAINE,
@@ -502,7 +502,7 @@ def update_park(row):
 
     # 1. fermer version actuelle
     session.sql("""
-        UPDATE S_REFERENTIEL.T_DIM_PARC
+        UPDATE S_REFERENTIEL.T_R_PARC
         SET 
             DATE_FIN = CURRENT_TIMESTAMP(),
             IS_ACTIVE = 'FALSE',
@@ -518,7 +518,7 @@ def update_park(row):
     # 2. insérer nouvelle version
 
     session.sql("""
-        INSERT INTO S_REFERENTIEL.T_DIM_PARC (
+        INSERT INTO S_REFERENTIEL.T_R_PARC (
             CODE_PARC,
             NOM_PARC,
             ADRESSE_PARC,
@@ -574,7 +574,7 @@ def update_exploit(row: dict, user: str):
 
     # 1. close ancienne ligne
     session.sql("""
-        UPDATE S_REFERENTIEL.T_DIM_PARC_EXPLOITATION
+        UPDATE S_REFERENTIEL.T_R_PARC_EXPLOITATION
         SET 
             DATE_FIN = CURRENT_TIMESTAMP(),
             IS_ACTIVE = FALSE,
@@ -591,7 +591,7 @@ def update_commercial(row, user):
 
     # 1. close ancienne ligne
     session.sql("""
-        UPDATE S_REFERENTIEL.T_DIM_PARC_COMMERCIAL
+        UPDATE S_REFERENTIEL.T_R_PARC_COMMERCIAL
         SET 
             DATE_FIN = CURRENT_TIMESTAMP(),
             IS_ACTIVE = FALSE,
@@ -608,7 +608,7 @@ def update_juridique(row, user):
 
     # 1. close ancienne ligne
     session.sql("""
-        UPDATE S_REFERENTIEL.T_DIM_PARC_JURIDIQUE
+        UPDATE S_REFERENTIEL.T_R_PARC_JURIDIQUE
         SET 
             DATE_FIN = CURRENT_TIMESTAMP(),
             IS_ACTIVE = FALSE,
@@ -626,7 +626,7 @@ def update_incendie(row: dict, user: str):
 
     # 1. close ancienne ligne
     session.sql("""
-        UPDATE S_REFERENTIEL.T_DIM_PARC_SECURITE_INCENDIE
+        UPDATE S_REFERENTIEL.T_R_PARC_SECURITE_INCENDIE
         SET 
             DATE_FIN = CURRENT_TIMESTAMP(),
             IS_ACTIVE = FALSE,
@@ -643,7 +643,7 @@ def update_divers(row, user):
 
     # 1. close ancienne ligne
     session.sql("""
-        UPDATE S_REFERENTIEL.T_DIM_PARC_DIVERS
+        UPDATE S_REFERENTIEL.T_R_PARC_DIVERS
         SET 
             DATE_FIN = CURRENT_TIMESTAMP(),
             IS_ACTIVE = FALSE,
@@ -660,7 +660,7 @@ def update_divers(row, user):
 def delete_park(code_parc, user):
 
     session.sql("""
-        UPDATE S_REFERENTIEL.T_DIM_PARC
+        UPDATE S_REFERENTIEL.T_R_PARC
         SET 
             IS_ACTIVE = FALSE,
             DATE_FIN = CURRENT_TIMESTAMP(),
@@ -673,7 +673,7 @@ def delete_park(code_parc, user):
 def get_history(code_parc):
     return session.sql("""
         SELECT *
-        FROM S_REFERENTIEL.T_DIM_PARC
+        FROM S_REFERENTIEL.T_R_PARC
         WHERE CODE_PARC = ?
         ORDER BY DATE_DEBUT DESC
     """, [code_parc]).to_pandas()
@@ -691,7 +691,7 @@ def get_history_commercial():
         DATE_DEBUT,
         DATE_FIN,
         IS_ACTIVE
-    FROM S_REFERENTIEL.T_DIM_PARC_COMMERCIAL
+    FROM S_REFERENTIEL.T_R_PARC_COMMERCIAL
     ORDER BY CODE_PARC, DATE_DEBUT DESC
     """, ).to_pandas()
 
@@ -708,7 +708,7 @@ def get_history_juridique():
         DATE_DEBUT,
         DATE_FIN,
         IS_ACTIVE
-    FROM S_REFERENTIEL.T_DIM_PARC_JURIDIQUE
+    FROM S_REFERENTIEL.T_R_PARC_JURIDIQUE
     ORDER BY CODE_PARC, DATE_DEBUT DESC
     """, ).to_pandas()
 
@@ -726,6 +726,6 @@ def get_history_divers():
         DATE_DEBUT,
         DATE_FIN,
         IS_ACTIVE
-    FROM S_REFERENTIEL.T_DIM_PARC_DIVERS
+    FROM S_REFERENTIEL.T_R_PARC_DIVERS
     ORDER BY CODE_PARC, DATE_DEBUT DESC
     """).to_pandas()
