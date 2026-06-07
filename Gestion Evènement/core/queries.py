@@ -40,11 +40,11 @@ def get_evenements():
             e.NOM_MODIFICATEUR,
             e.DATE_CREATION,
             e.DATE_MODIFICATION
-        FROM {SCHEMA}.T_FACT_EVENEMENT e
-        LEFT JOIN {SCHEMA}.T_DIM_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_DIM_DESCRIPTION_EVENEMENT d ON e.CODE_DESCRIPTION = d.CODE_DESCRIPTION
-        LEFT JOIN {SCHEMA}.T_DIM_LIEU_EVENEMENT l ON e.CODE_LIEU = l.CODE_LIEU
-        LEFT JOIN {SCHEMA}.T_DIM_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
+        FROM {SCHEMA}.T_F_EVENEMENT e
+        LEFT JOIN {SCHEMA}.T_R_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
+        LEFT JOIN {SCHEMA}.T_R_DESCRIPTION_EVENEMENT d ON e.CODE_DESCRIPTION = d.CODE_DESCRIPTION
+        LEFT JOIN {SCHEMA}.T_R_LIEU_EVENEMENT l ON e.CODE_LIEU = l.CODE_LIEU
+        LEFT JOIN {SCHEMA}.T_R_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
         WHERE e.IS_ACTIVE = TRUE
         ORDER BY e.DATE_DEBUT DESC
     """)
@@ -52,7 +52,7 @@ def get_evenements():
 
 def get_ref_types():
     return run_query(
-        f"SELECT CODE_TYPE_EVENEMENT, LIBELLE_TYPE_EVENEMENT, CATEGORIE, IS_TRAVAUX FROM {SCHEMA}.T_DIM_TYPE_EVENEMENT WHERE IS_ACTIVE = TRUE ORDER BY CATEGORIE, LIBELLE_TYPE_EVENEMENT"
+        f"SELECT CODE_TYPE_EVENEMENT, LIBELLE_TYPE_EVENEMENT, CATEGORIE, IS_TRAVAUX FROM {SCHEMA}.T_R_TYPE_EVENEMENT WHERE IS_ACTIVE = TRUE ORDER BY CATEGORIE, LIBELLE_TYPE_EVENEMENT"
     )
 
 
@@ -60,32 +60,32 @@ def insert_type_evenement(libelle: str, categorie: str, is_travaux: bool = False
     """Insert a new event type and return its code."""
     libelle_sql = libelle.replace("'", "''")
     run_dml(f"""
-        INSERT INTO {SCHEMA}.T_DIM_TYPE_EVENEMENT (CODE_TYPE_EVENEMENT, LIBELLE_TYPE_EVENEMENT, CATEGORIE, IS_TRAVAUX, IS_ACTIVE)
+        INSERT INTO {SCHEMA}.T_R_TYPE_EVENEMENT (CODE_TYPE_EVENEMENT, LIBELLE_TYPE_EVENEMENT, CATEGORIE, IS_TRAVAUX, IS_ACTIVE)
         SELECT COALESCE(MAX(CODE_TYPE_EVENEMENT), 0) + 1, '{libelle_sql}', '{categorie}', {is_travaux}, TRUE
-        FROM {SCHEMA}.T_DIM_TYPE_EVENEMENT
+        FROM {SCHEMA}.T_R_TYPE_EVENEMENT
     """)
-    df = run_query(f"SELECT MAX(CODE_TYPE_EVENEMENT) AS CODE FROM {SCHEMA}.T_DIM_TYPE_EVENEMENT WHERE LIBELLE_TYPE_EVENEMENT = '{libelle_sql}'")
+    df = run_query(f"SELECT MAX(CODE_TYPE_EVENEMENT) AS CODE FROM {SCHEMA}.T_R_TYPE_EVENEMENT WHERE LIBELLE_TYPE_EVENEMENT = '{libelle_sql}'")
     return int(df.iloc[0]["CODE"])
 
 
 def get_ref_descriptions(code_type: int = None):
     where = f"WHERE IS_ACTIVE = TRUE AND CODE_TYPE_EVENEMENT = {code_type}" if code_type else "WHERE IS_ACTIVE = TRUE"
     return run_query(
-        f"SELECT CODE_DESCRIPTION, LIBELLE_DESCRIPTION, CODE_TYPE_EVENEMENT FROM {SCHEMA}.T_DIM_DESCRIPTION_EVENEMENT {where} ORDER BY LIBELLE_DESCRIPTION",
+        f"SELECT CODE_DESCRIPTION, LIBELLE_DESCRIPTION, CODE_TYPE_EVENEMENT FROM {SCHEMA}.T_R_DESCRIPTION_EVENEMENT {where} ORDER BY LIBELLE_DESCRIPTION",
         ttl=0
     )
 
 
 def get_ref_lieux():
     return run_query(
-        f"SELECT CODE_LIEU, LIBELLE_LIEU, VILLE FROM {SCHEMA}.T_DIM_LIEU_EVENEMENT WHERE IS_ACTIVE = TRUE ORDER BY VILLE, LIBELLE_LIEU",
+        f"SELECT CODE_LIEU, LIBELLE_LIEU, VILLE FROM {SCHEMA}.T_R_LIEU_EVENEMENT WHERE IS_ACTIVE = TRUE ORDER BY VILLE, LIBELLE_LIEU",
         ttl=0
     )
 
 
 def get_ref_impacts():
     return run_query(
-        f"SELECT CODE_IMPACT, LIBELLE_IMPACT, NIVEAU_SEVERITE FROM {SCHEMA}.T_DIM_IMPACT_EVENEMENT WHERE IS_ACTIVE = TRUE ORDER BY NIVEAU_SEVERITE",
+        f"SELECT CODE_IMPACT, LIBELLE_IMPACT, NIVEAU_SEVERITE FROM {SCHEMA}.T_R_IMPACT_EVENEMENT WHERE IS_ACTIVE = TRUE ORDER BY NIVEAU_SEVERITE",
         ttl=0
     )
 
@@ -98,19 +98,19 @@ def get_parkings():
             e.NB_CAPACITE_EXPLOITEE AS CAPACITE,
             e.NB_VOIES_ACCES AS NB_PISTES_ENTREE,
             e.NB_VOIES_SORTIES AS NB_PISTES_SORTIE
-        FROM {SCHEMA}.T_DIM_PARC p
-        LEFT JOIN {SCHEMA}.T_DIM_PARC_EXPLOITATION e ON p.CODE_PARC = e.CODE_PARC AND e.IS_ACTIVE = TRUE
+        FROM {SCHEMA}.T_R_PARC p
+        LEFT JOIN {SCHEMA}.T_R_PARC_EXPLOITATION e ON p.CODE_PARC = e.CODE_PARC AND e.IS_ACTIVE = TRUE
         WHERE p.IS_ACTIVE = TRUE
         ORDER BY p.NOM_PARC
     """, ttl=0)
 
 
 def get_parcs_evenement(code_evt: int):
-    return run_query(f"SELECT CODE_PARC, NOM_PARC FROM {SCHEMA}.T_FACT_EVENEMENT_PARC WHERE CODE_EVENEMENT = {code_evt}")
+    return run_query(f"SELECT CODE_PARC, NOM_PARC FROM {SCHEMA}.T_F_EVENEMENT_PARC WHERE CODE_EVENEMENT = {code_evt}")
 
 
 def get_max_code_evenement():
-    df = run_query(f"SELECT COALESCE(MAX(CODE_EVENEMENT), 0) AS CODE FROM {SCHEMA}.T_FACT_EVENEMENT")
+    df = run_query(f"SELECT COALESCE(MAX(CODE_EVENEMENT), 0) AS CODE FROM {SCHEMA}.T_F_EVENEMENT")
     return int(df.iloc[0]["CODE"])
 
 
@@ -119,7 +119,7 @@ def get_max_code_evenement():
 def get_phases_travaux(code_evt: int):
     return run_query(f"""
         SELECT CODE_PHASE, NUMERO_PHASE, DATE_DEBUT, DATE_FIN, NB_PLACES_IMPACTEES, COMMENTAIRE
-        FROM {SCHEMA}.T_FACT_PHASE_TRAVAUX
+        FROM {SCHEMA}.T_F_PHASE_TRAVAUX
         WHERE CODE_EVENEMENT = {code_evt}
         ORDER BY NUMERO_PHASE
     """)
@@ -129,7 +129,7 @@ def get_all_phases_travaux():
     """Charge toutes les phases de tous les travaux en une seule requête."""
     return run_query(f"""
         SELECT CODE_EVENEMENT, NUMERO_PHASE, DATE_DEBUT, DATE_FIN, NB_PLACES_IMPACTEES, COMMENTAIRE
-        FROM {SCHEMA}.T_FACT_PHASE_TRAVAUX
+        FROM {SCHEMA}.T_F_PHASE_TRAVAUX
         ORDER BY CODE_EVENEMENT, NUMERO_PHASE
     """)
 
@@ -137,19 +137,19 @@ def get_all_phases_travaux():
 def insert_phase_travaux(code_evt: int, numero: int, date_debut: str, date_fin: str, nb_places: int, commentaire: str):
     commentaire_sql = commentaire.replace("'", "''") if commentaire else ""
     run_dml(f"""
-        INSERT INTO {SCHEMA}.T_FACT_PHASE_TRAVAUX
+        INSERT INTO {SCHEMA}.T_F_PHASE_TRAVAUX
         (CODE_EVENEMENT, NUMERO_PHASE, DATE_DEBUT, DATE_FIN, NB_PLACES_IMPACTEES, COMMENTAIRE)
         VALUES ({code_evt}, {numero}, '{date_debut}', '{date_fin}', {nb_places if nb_places else 'NULL'}, '{commentaire_sql}')
     """)
 
 
 def delete_phases_travaux(code_evt: int):
-    run_dml(f"DELETE FROM {SCHEMA}.T_FACT_PHASE_TRAVAUX WHERE CODE_EVENEMENT = {code_evt}")
+    run_dml(f"DELETE FROM {SCHEMA}.T_F_PHASE_TRAVAUX WHERE CODE_EVENEMENT = {code_evt}")
 
 
 def delete_phase_by_id(code_phase: int):
     """Supprime une seule phase par son CODE_PHASE."""
-    run_dml(f"DELETE FROM {SCHEMA}.T_FACT_PHASE_TRAVAUX WHERE CODE_PHASE = {code_phase}")
+    run_dml(f"DELETE FROM {SCHEMA}.T_F_PHASE_TRAVAUX WHERE CODE_PHASE = {code_phase}")
 
 
 def update_phase(code_phase: int, date_debut: str, date_fin: str, nb_places, commentaire: str):
@@ -157,7 +157,7 @@ def update_phase(code_phase: int, date_debut: str, date_fin: str, nb_places, com
     commentaire_sql = commentaire.replace("'", "''") if commentaire else ""
     nb_places_sql = nb_places if nb_places else "NULL"
     run_dml(f"""
-        UPDATE {SCHEMA}.T_FACT_PHASE_TRAVAUX
+        UPDATE {SCHEMA}.T_F_PHASE_TRAVAUX
         SET DATE_DEBUT = '{date_debut}',
             DATE_FIN = '{date_fin}',
             NB_PLACES_IMPACTEES = {nb_places_sql},
@@ -186,7 +186,7 @@ def insert_evenement(titre, code_type, code_description, description_autre, code
     contact_externe_sql = f"'{contact_externe.replace(chr(39), chr(39)+chr(39))}'" if contact_externe else "NULL"
 
     run_dml(f"""
-        INSERT INTO {SCHEMA}.T_FACT_EVENEMENT
+        INSERT INTO {SCHEMA}.T_F_EVENEMENT
         (CODE_EVENEMENT, TITRE_EVENEMENT, CODE_TYPE_EVENEMENT, CODE_DESCRIPTION, DESCRIPTION_AUTRE,
          CODE_LIEU, CODE_IMPACT, DATE_DEBUT, DATE_FIN,
          IS_JOURNEE_PARTIELLE, CRENEAU,
@@ -220,7 +220,7 @@ def insert_evenement(titre, code_type, code_description, description_autre, code
             '{user}',
             CURRENT_TIMESTAMP(),
             TRUE
-        FROM {SCHEMA}.T_FACT_EVENEMENT
+        FROM {SCHEMA}.T_F_EVENEMENT
     """)
 
 
@@ -228,7 +228,7 @@ def update_evenement(code_evt: int, set_parts: list, user: str):
     set_parts.append(f"NOM_MODIFICATEUR = '{user}'")
     set_parts.append("DATE_MODIFICATION = CURRENT_TIMESTAMP()")
     run_dml(f"""
-        UPDATE {SCHEMA}.T_FACT_EVENEMENT SET
+        UPDATE {SCHEMA}.T_F_EVENEMENT SET
             {', '.join(set_parts)}
         WHERE CODE_EVENEMENT = {code_evt}
     """)
@@ -236,14 +236,14 @@ def update_evenement(code_evt: int, set_parts: list, user: str):
 
 def delete_evenement(code_evt: int, user: str):
     run_dml(f"""
-        UPDATE {SCHEMA}.T_FACT_EVENEMENT
+        UPDATE {SCHEMA}.T_F_EVENEMENT
         SET IS_ACTIVE = FALSE,
             NOM_MODIFICATEUR = '{user}',
             DATE_MODIFICATION = CURRENT_TIMESTAMP()
         WHERE CODE_EVENEMENT = {code_evt}
     """)
-    run_dml(f"DELETE FROM {SCHEMA}.T_FACT_EVENEMENT_PARC WHERE CODE_EVENEMENT = {code_evt}")
-    run_dml(f"DELETE FROM {SCHEMA}.T_FACT_PHASE_TRAVAUX WHERE CODE_EVENEMENT = {code_evt}")
+    run_dml(f"DELETE FROM {SCHEMA}.T_F_EVENEMENT_PARC WHERE CODE_EVENEMENT = {code_evt}")
+    run_dml(f"DELETE FROM {SCHEMA}.T_F_PHASE_TRAVAUX WHERE CODE_EVENEMENT = {code_evt}")
 
 
 # ===== PARKINGS ASSOCIES =====
@@ -251,13 +251,13 @@ def delete_evenement(code_evt: int, user: str):
 def insert_parc_evenement(code_evt: int, code_parc: str, nom_parc: str):
     code_parc_sql = code_parc.replace("'", "''")
     run_dml(f"""
-        INSERT INTO {SCHEMA}.T_FACT_EVENEMENT_PARC (CODE_EVENEMENT, CODE_PARC, NOM_PARC)
+        INSERT INTO {SCHEMA}.T_F_EVENEMENT_PARC (CODE_EVENEMENT, CODE_PARC, NOM_PARC)
         VALUES ({code_evt}, '{code_parc_sql}', '{nom_parc.replace("'", "''")}')
     """)
 
 
 def delete_parcs_evenement(code_evt: int):
-    run_dml(f"DELETE FROM {SCHEMA}.T_FACT_EVENEMENT_PARC WHERE CODE_EVENEMENT = {code_evt}")
+    run_dml(f"DELETE FROM {SCHEMA}.T_F_EVENEMENT_PARC WHERE CODE_EVENEMENT = {code_evt}")
 
 
 # ===== HISTORIQUE =====
@@ -272,7 +272,7 @@ def get_historique(code_evt: int = None):
                TYPE_TRAVAUX, CONTACT_INTERNE, CONTACT_EXTERNE, IS_TRAVAUX_PHASES,
                COMMENTAIRE, PARKINGS_IMPACTES, IS_ACTIVE, MODIFIE_PAR, ACTION,
                DATE_DEBUT_VALIDITE, DATE_FIN_VALIDITE
-        FROM {SCHEMA}.T_FACT_HISTORIQUE_EVENEMENT
+        FROM {SCHEMA}.T_F_HISTORIQUE_EVENEMENT
         {where_clause}
         ORDER BY DATE_DEBUT_VALIDITE DESC
     """)
@@ -287,7 +287,7 @@ def get_historique_complet():
                TYPE_TRAVAUX, CONTACT_INTERNE, CONTACT_EXTERNE, IS_TRAVAUX_PHASES,
                COMMENTAIRE, PARKINGS_IMPACTES, IS_ACTIVE, MODIFIE_PAR, ACTION,
                DATE_DEBUT_VALIDITE, DATE_FIN_VALIDITE
-        FROM {SCHEMA}.T_FACT_HISTORIQUE_EVENEMENT
+        FROM {SCHEMA}.T_F_HISTORIQUE_EVENEMENT
         ORDER BY DATE_DEBUT_VALIDITE DESC
     """)
 
@@ -296,13 +296,13 @@ def insert_snapshot(code_evt: int, action: str, user: str):
     """Insert a full snapshot of the event into history and close the previous one."""
     # Close previous active snapshot
     run_dml(f"""
-        UPDATE {SCHEMA}.T_FACT_HISTORIQUE_EVENEMENT
+        UPDATE {SCHEMA}.T_F_HISTORIQUE_EVENEMENT
         SET DATE_FIN_VALIDITE = CURRENT_TIMESTAMP(), IS_ACTIVE = 0
         WHERE CODE_EVENEMENT = {code_evt} AND DATE_FIN_VALIDITE IS NULL
     """)
     # Insert new snapshot with current state
     run_dml(f"""
-        INSERT INTO {SCHEMA}.T_FACT_HISTORIQUE_EVENEMENT
+        INSERT INTO {SCHEMA}.T_F_HISTORIQUE_EVENEMENT
         (CODE_EVENEMENT, TITRE_EVENEMENT, TYPE_EVENEMENT, CATEGORIE, DESCRIPTION,
          LIEU, VILLE, IMPACT, NIVEAU_SEVERITE, DATE_DEBUT, DATE_FIN,
          IS_JOURNEE_PARTIELLE, CRENEAU, NB_PLACES_IMPACTEES, FERMETURE_TOTALE,
@@ -333,17 +333,17 @@ def insert_snapshot(code_evt: int, action: str, user: str):
             e.CONTACT_EXTERNE,
             e.IS_TRAVAUX_PHASES,
             e.COMMENTAIRE,
-            (SELECT LISTAGG(NOM_PARC, ', ') FROM {SCHEMA}.T_FACT_EVENEMENT_PARC WHERE CODE_EVENEMENT = {code_evt}),
+            (SELECT LISTAGG(NOM_PARC, ', ') FROM {SCHEMA}.T_F_EVENEMENT_PARC WHERE CODE_EVENEMENT = {code_evt}),
             CASE WHEN e.IS_ACTIVE = TRUE THEN 1 ELSE 0 END,
             '{user}',
             '{action}',
             CURRENT_TIMESTAMP(),
             NULL
-        FROM {SCHEMA}.T_FACT_EVENEMENT e
-        LEFT JOIN {SCHEMA}.T_DIM_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_DIM_DESCRIPTION_EVENEMENT d ON e.CODE_DESCRIPTION = d.CODE_DESCRIPTION
-        LEFT JOIN {SCHEMA}.T_DIM_LIEU_EVENEMENT l ON e.CODE_LIEU = l.CODE_LIEU
-        LEFT JOIN {SCHEMA}.T_DIM_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
+        FROM {SCHEMA}.T_F_EVENEMENT e
+        LEFT JOIN {SCHEMA}.T_R_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
+        LEFT JOIN {SCHEMA}.T_R_DESCRIPTION_EVENEMENT d ON e.CODE_DESCRIPTION = d.CODE_DESCRIPTION
+        LEFT JOIN {SCHEMA}.T_R_LIEU_EVENEMENT l ON e.CODE_LIEU = l.CODE_LIEU
+        LEFT JOIN {SCHEMA}.T_R_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
         WHERE e.CODE_EVENEMENT = {code_evt}
     """)
 
@@ -351,7 +351,7 @@ def insert_snapshot(code_evt: int, action: str, user: str):
 def close_all_snapshots(code_evt: int):
     """Close all open snapshots for a deleted event."""
     run_dml(f"""
-        UPDATE {SCHEMA}.T_FACT_HISTORIQUE_EVENEMENT
+        UPDATE {SCHEMA}.T_F_HISTORIQUE_EVENEMENT
         SET DATE_FIN_VALIDITE = CURRENT_TIMESTAMP()
         WHERE CODE_EVENEMENT = {code_evt} AND DATE_FIN_VALIDITE IS NULL
     """)
@@ -376,16 +376,16 @@ def get_evenements_par_parking():
             e.DATE_FIN,
             CASE 
                 WHEN e.IS_TRAVAUX_PHASES = TRUE THEN 
-                    (SELECT COALESCE(SUM(ph.NB_PLACES_IMPACTEES), 0) FROM {SCHEMA}.T_FACT_PHASE_TRAVAUX ph WHERE ph.CODE_EVENEMENT = e.CODE_EVENEMENT)
+                    (SELECT COALESCE(SUM(ph.NB_PLACES_IMPACTEES), 0) FROM {SCHEMA}.T_F_PHASE_TRAVAUX ph WHERE ph.CODE_EVENEMENT = e.CODE_EVENEMENT)
                 ELSE COALESCE(e.NB_PLACES_IMPACTEES, 0)
             END AS NB_PLACES_IMPACTEES,
             e.FERMETURE_TOTALE,
             e.IS_ACTIVE
-        FROM {SCHEMA}.T_FACT_EVENEMENT_PARC ep
-        JOIN {SCHEMA}.T_FACT_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_DIM_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
-        LEFT JOIN {SCHEMA}.T_DIM_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_DIM_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
+        FROM {SCHEMA}.T_F_EVENEMENT_PARC ep
+        JOIN {SCHEMA}.T_F_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
+        LEFT JOIN {SCHEMA}.T_R_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
+        LEFT JOIN {SCHEMA}.T_R_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
+        LEFT JOIN {SCHEMA}.T_R_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
         WHERE e.IS_ACTIVE = TRUE
         ORDER BY ep.NOM_PARC, e.DATE_DEBUT DESC
     """)
@@ -403,17 +403,17 @@ def get_stats_par_parking():
                 CASE 
                     WHEN e.FERMETURE_TOTALE = TRUE THEN COALESCE(px.NB_CAPACITE_EXPLOITEE, 0)
                     WHEN e.IS_TRAVAUX_PHASES = TRUE THEN 
-                        COALESCE((SELECT SUM(ph.NB_PLACES_IMPACTEES) FROM {SCHEMA}.T_FACT_PHASE_TRAVAUX ph WHERE ph.CODE_EVENEMENT = e.CODE_EVENEMENT), 0)
+                        COALESCE((SELECT SUM(ph.NB_PLACES_IMPACTEES) FROM {SCHEMA}.T_F_PHASE_TRAVAUX ph WHERE ph.CODE_EVENEMENT = e.CODE_EVENEMENT), 0)
                     ELSE COALESCE(e.NB_PLACES_IMPACTEES, 0) 
                 END
             ) AS TOTAL_PLACES_IMPACTEES,
             MAX(CASE WHEN e.FERMETURE_TOTALE = TRUE THEN 1 ELSE 0 END)::BOOLEAN AS FERMETURE_TOTALE,
             MIN(e.DATE_DEBUT) AS PREMIER_EVENEMENT,
             MAX(e.DATE_DEBUT) AS DERNIER_EVENEMENT
-        FROM {SCHEMA}.T_FACT_EVENEMENT_PARC ep
-        JOIN {SCHEMA}.T_FACT_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_DIM_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
-        LEFT JOIN {SCHEMA}.T_DIM_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
+        FROM {SCHEMA}.T_F_EVENEMENT_PARC ep
+        JOIN {SCHEMA}.T_F_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
+        LEFT JOIN {SCHEMA}.T_R_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
+        LEFT JOIN {SCHEMA}.T_R_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
         WHERE e.IS_ACTIVE = TRUE
         GROUP BY ep.NOM_PARC, px.NB_CAPACITE_EXPLOITEE
         ORDER BY NB_EVENEMENTS DESC
@@ -423,15 +423,15 @@ def get_stats_par_parking():
 # ===== TABLE DE FAIT DISPONIBILITE =====
 
 def recalculer_disponibilite():
-    """Recalcule la table de fait T_FACT_DISPONIBILITE_PARC.
+    """Recalcule la table de fait T_F_DISPONIBILITE_PARC.
     Supprime et réinsère toutes les lignes basées sur les événements actifs.
     Pour les travaux phasés, utilise les phases individuelles (dates + places spécifiques).
     """
-    run_dml(f"DELETE FROM {SCHEMA}.T_FACT_DISPONIBILITE_PARC")
+    run_dml(f"DELETE FROM {SCHEMA}.T_F_DISPONIBILITE_PARC")
 
     # 1. Événements NON phasés (ou non-travaux)
     run_dml(f"""
-        INSERT INTO {SCHEMA}.T_FACT_DISPONIBILITE_PARC
+        INSERT INTO {SCHEMA}.T_F_DISPONIBILITE_PARC
         (CODE_PARC, NOM_PARC, CODE_EVENEMENT, TITRE_EVENEMENT, TYPE_EVENEMENT,
          DATE_DEBUT, DATE_FIN, CAPACITE_EXPLOITEE, NB_PLACES_IMPACTEES,
          FERMETURE_TOTALE, PLACES_DISPONIBLES, TAUX_IMPACT, IS_EN_COURS, DATE_CALCUL)
@@ -464,17 +464,17 @@ def recalculer_disponibilite():
                 THEN TRUE ELSE FALSE
             END AS IS_EN_COURS,
             CURRENT_TIMESTAMP()
-        FROM {SCHEMA}.T_FACT_EVENEMENT_PARC ep
-        JOIN {SCHEMA}.T_FACT_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_DIM_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
-        LEFT JOIN {SCHEMA}.T_DIM_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
+        FROM {SCHEMA}.T_F_EVENEMENT_PARC ep
+        JOIN {SCHEMA}.T_F_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
+        LEFT JOIN {SCHEMA}.T_R_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
+        LEFT JOIN {SCHEMA}.T_R_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
         WHERE e.IS_ACTIVE = TRUE
           AND (e.IS_TRAVAUX_PHASES = FALSE OR e.IS_TRAVAUX_PHASES IS NULL)
     """)
 
     # 2. Travaux PHASÉS : une ligne par phase avec ses dates et places propres
     run_dml(f"""
-        INSERT INTO {SCHEMA}.T_FACT_DISPONIBILITE_PARC
+        INSERT INTO {SCHEMA}.T_F_DISPONIBILITE_PARC
         (CODE_PARC, NOM_PARC, CODE_EVENEMENT, TITRE_EVENEMENT, TYPE_EVENEMENT,
          DATE_DEBUT, DATE_FIN, CAPACITE_EXPLOITEE, NB_PLACES_IMPACTEES,
          FERMETURE_TOTALE, PLACES_DISPONIBLES, TAUX_IMPACT, IS_EN_COURS, DATE_CALCUL)
@@ -504,11 +504,11 @@ def recalculer_disponibilite():
                 THEN TRUE ELSE FALSE
             END AS IS_EN_COURS,
             CURRENT_TIMESTAMP()
-        FROM {SCHEMA}.T_FACT_EVENEMENT_PARC ep
-        JOIN {SCHEMA}.T_FACT_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
-        JOIN {SCHEMA}.T_FACT_PHASE_TRAVAUX ph ON e.CODE_EVENEMENT = ph.CODE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_DIM_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
-        LEFT JOIN {SCHEMA}.T_DIM_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
+        FROM {SCHEMA}.T_F_EVENEMENT_PARC ep
+        JOIN {SCHEMA}.T_F_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
+        JOIN {SCHEMA}.T_F_PHASE_TRAVAUX ph ON e.CODE_EVENEMENT = ph.CODE_EVENEMENT
+        LEFT JOIN {SCHEMA}.T_R_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
+        LEFT JOIN {SCHEMA}.T_R_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
         WHERE e.IS_ACTIVE = TRUE
           AND e.IS_TRAVAUX_PHASES = TRUE
     """)
@@ -529,7 +529,7 @@ def get_disponibilite_parkings():
             END AS TAUX_IMPACT,
             COUNT(*) AS NB_EVENEMENTS_EN_COURS,
             MAX(FERMETURE_TOTALE::INT)::BOOLEAN AS FERMETURE_TOTALE
-        FROM {SCHEMA}.T_FACT_DISPONIBILITE_PARC
+        FROM {SCHEMA}.T_F_DISPONIBILITE_PARC
         WHERE IS_EN_COURS = TRUE
         GROUP BY CODE_PARC, NOM_PARC, CAPACITE_EXPLOITEE
         ORDER BY TAUX_IMPACT DESC
@@ -540,7 +540,7 @@ def get_fait_disponibilite():
     """Retourne le détail de la table de fait, ordonné par parking puis par date."""
     return run_query(f"""
         SELECT *
-        FROM {SCHEMA}.T_FACT_DISPONIBILITE_PARC
+        FROM {SCHEMA}.T_F_DISPONIBILITE_PARC
         ORDER BY NOM_PARC, DATE_DEBUT, TITRE_EVENEMENT
     """)
 
@@ -563,7 +563,7 @@ def get_disponibilite_par_phase():
             f.TAUX_IMPACT,
             f.IS_EN_COURS,
             f.DATE_CALCUL
-        FROM {SCHEMA}.T_FACT_DISPONIBILITE_PARC f
+        FROM {SCHEMA}.T_F_DISPONIBILITE_PARC f
         WHERE f.TITRE_EVENEMENT LIKE '%Phase%'
         ORDER BY f.NOM_PARC, f.DATE_DEBUT
     """)
