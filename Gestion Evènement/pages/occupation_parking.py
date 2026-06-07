@@ -3,7 +3,8 @@ import pandas as pd
 
 from core.queries import (
     get_evenements_par_parking, get_stats_par_parking,
-    get_disponibilite_parkings, get_fait_disponibilite, recalculer_disponibilite
+    get_disponibilite_parkings, get_fait_disponibilite, recalculer_disponibilite,
+    get_disponibilite_par_phase
 )
 
 st.title("🚗 Impact par Parking")
@@ -111,7 +112,37 @@ else:
     if "TAUX_IMPACT" in df_vue.columns:
         col_parking = "NOM_PARC" if "NOM_PARC" in df_vue.columns else "PARKING"
         if col_parking in df_vue.columns:
-            st.bar_chart(df_vue.set_index(col_parking)["TAUX_IMPACT"])
+            df_chart = df_vue[[col_parking, "TAUX_IMPACT"]].copy()
+            df_chart["TAUX_IMPACT"] = pd.to_numeric(df_chart["TAUX_IMPACT"], errors="coerce").fillna(0)
+            df_chart = df_chart.sort_values("TAUX_IMPACT", ascending=False)
+            st.vega_lite_chart(df_chart, {
+                "mark": {"type": "bar", "cornerRadiusEnd": 4},
+                "encoding": {
+                    "x": {
+                        "field": col_parking,
+                        "type": "nominal",
+                        "sort": "-y",
+                        "axis": {"title": ""}
+                    },
+                    "y": {
+                        "field": "TAUX_IMPACT",
+                        "type": "quantitative",
+                        "axis": {"title": "Taux d'impact (%)"},
+                        "scale": {"domain": [0, 100]}
+                    },
+                    "color": {
+                        "field": "TAUX_IMPACT",
+                        "type": "quantitative",
+                        "scale": {"scheme": "redyellowgreen", "reverse": True, "domain": [0, 100]},
+                        "legend": None
+                    },
+                    "tooltip": [
+                        {"field": col_parking, "type": "nominal", "title": "Parking"},
+                        {"field": "TAUX_IMPACT", "type": "quantitative", "title": "Taux d'impact (%)", "format": ".1f"}
+                    ]
+                },
+                "height": 300
+            }, use_container_width=True)
 
 st.markdown("---")
 
@@ -174,3 +205,38 @@ with st.expander("📄 Détail disponibilité par événement"):
             st.info(f"Aucune donnée de disponibilité pour {selected_parking}.")
         else:
             st.dataframe(df_fait_display, use_container_width=True, hide_index=True)
+
+st.markdown("---")
+
+# ===== SECTION 4 : DISPONIBILITE PAR PHASE =====
+st.subheader("📋 Disponibilité par phase de travaux")
+st.caption("Détail des impacts par phase pour les travaux phasés")
+
+df_phases_dispo = get_disponibilite_par_phase()
+if df_phases_dispo.empty:
+    st.info("Aucun travaux phasé n'impacte les parkings actuellement.")
+else:
+    # Filtrer par parking si sélectionné
+    if selected_parking and selected_parking != "Tous":
+        df_phases_display = df_phases_dispo[df_phases_dispo["NOM_PARC"] == selected_parking]
+    else:
+        df_phases_display = df_phases_dispo
+
+    if df_phases_display.empty:
+        st.info(f"Aucune phase de travaux pour {selected_parking}.")
+    else:
+        st.caption(f"{len(df_phases_display)} phase(s)")
+        st.dataframe(df_phases_display, use_container_width=True, hide_index=True,
+            column_config={
+                "NOM_PARC": st.column_config.TextColumn("Parking"),
+                "TITRE_EVENEMENT": st.column_config.TextColumn("Phase"),
+                "TYPE_EVENEMENT": st.column_config.TextColumn("Type"),
+                "DATE_DEBUT": st.column_config.DatetimeColumn("Début", format="DD/MM/YYYY"),
+                "DATE_FIN": st.column_config.DatetimeColumn("Fin", format="DD/MM/YYYY"),
+                "CAPACITE_EXPLOITEE": st.column_config.NumberColumn("Capacité", format="%d"),
+                "NB_PLACES_IMPACTEES": st.column_config.NumberColumn("Places impactées", format="%d"),
+                "PLACES_DISPONIBLES": st.column_config.NumberColumn("Places disponibles", format="%d"),
+                "TAUX_IMPACT": st.column_config.ProgressColumn("Taux d'impact", format="%.1f%%", min_value=0, max_value=100),
+                "IS_EN_COURS": st.column_config.CheckboxColumn("En cours"),
+                "FERMETURE_TOTALE": st.column_config.CheckboxColumn("Fermé"),
+            })

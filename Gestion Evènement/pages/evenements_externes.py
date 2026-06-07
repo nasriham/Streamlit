@@ -51,7 +51,7 @@ with tab_search:
             display_cols = ["CODE_EVENEMENT", "TITRE_EVENEMENT", "TYPE_EVENEMENT",
                             "DESCRIPTION", "LIEU", "VILLE", "IMPACT",
                             "DATE_DEBUT", "DATE_FIN", "CRENEAU", "NB_PLACES_IMPACTEES",
-                            "COMMENTAIRE"]
+                            "FERMETURE_TOTALE", "COMMENTAIRE"]
             available_cols = [c for c in display_cols if c in df_results.columns]
             st.dataframe(df_results[available_cols], use_container_width=True, hide_index=True,
                 column_config={
@@ -66,6 +66,7 @@ with tab_search:
                     "DATE_FIN": st.column_config.DatetimeColumn("Fin", format="DD/MM/YYYY HH:mm"),
                     "CRENEAU": st.column_config.TextColumn("Créneau"),
                     "NB_PLACES_IMPACTEES": st.column_config.NumberColumn("Places impactées"),
+                    "FERMETURE_TOTALE": st.column_config.CheckboxColumn("Fermeture totale"),
                     "COMMENTAIRE": st.column_config.TextColumn("Commentaire", width="large"),
                 })
 
@@ -290,48 +291,56 @@ with tab_edit:
                     st.markdown(f"**Fin :** {evt_row['DATE_FIN'] if pd.notna(evt_row['DATE_FIN']) else 'Non définie'}")
                     st.markdown(f"**Fermeture totale :** {'Oui' if evt_row.get('FERMETURE_TOTALE') else 'Non'}")
 
-            with st.form("form_edit_ext"):
-                new_titre = st.text_input("Titre", placeholder="Laisser vide pour conserver", max_chars=300)
+                new_titre = st.text_input("Titre", placeholder="Laisser vide pour conserver", max_chars=300, key=f"ext_edit_titre_{code_edit}")
 
                 type_options_edit = dict(zip(df_types_edit["LIBELLE_TYPE_EVENEMENT"], df_types_edit["CODE_TYPE_EVENEMENT"]))
-                new_type = st.selectbox("Type", options=["-- Ne pas modifier --"] + list(type_options_edit.keys()))
+                new_type = st.selectbox("Type", options=["-- Ne pas modifier --"] + list(type_options_edit.keys()), key=f"ext_edit_type_{code_edit}")
 
                 col1, col2 = st.columns(2)
                 with col1:
                     lieu_options_edit = dict(zip(df_lieux_edit["VILLE"] + " - " + df_lieux_edit["LIBELLE_LIEU"], df_lieux_edit["CODE_LIEU"]))
-                    new_lieu = st.selectbox("Lieu", options=["-- Ne pas modifier --"] + list(lieu_options_edit.keys()))
+                    new_lieu = st.selectbox("Lieu", options=["-- Ne pas modifier --"] + list(lieu_options_edit.keys()), key=f"ext_edit_lieu_{code_edit}")
                 with col2:
                     impact_options_edit = dict(zip(
                         df_impacts_edit["LIBELLE_IMPACT"] + " (niv. " + df_impacts_edit["NIVEAU_SEVERITE"].astype(str) + ")",
                         df_impacts_edit["CODE_IMPACT"]
                     ))
-                    new_impact = st.selectbox("Impact", options=["-- Ne pas modifier --"] + list(impact_options_edit.keys()))
+                    new_impact = st.selectbox("Impact", options=["-- Ne pas modifier --"] + list(impact_options_edit.keys()), key=f"ext_edit_impact_{code_edit}")
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    new_date_debut = st.date_input("Date de début", value=None, key="ext_edit_dd")
-                    new_heure_debut = st.time_input("Heure de début", value=None, key="ext_edit_hd")
+                    new_date_debut = st.date_input("Date de début", value=None, key=f"ext_edit_dd_{code_edit}")
+                    new_heure_debut = st.time_input("Heure de début", value=None, key=f"ext_edit_hd_{code_edit}")
                 with col2:
-                    new_date_fin = st.date_input("Date de fin", value=None, key="ext_edit_df")
-                    new_heure_fin = st.time_input("Heure de fin", value=None, key="ext_edit_hf")
+                    new_date_fin = st.date_input("Date de fin", value=None, key=f"ext_edit_df_{code_edit}")
+                    new_heure_fin = st.time_input("Heure de fin", value=None, key=f"ext_edit_hf_{code_edit}")
 
                 st.markdown("##### Places et pistes")
-                col1, col2 = st.columns(2)
-                with col1:
-                    new_nb_places = st.number_input("Nb places impactées (0 = ne pas modifier)", min_value=0, value=0, key="ext_edit_places")
-                    new_fermeture = st.selectbox("Fermeture totale", options=["-- Ne pas modifier --", "Oui", "Non"], key="ext_edit_ferme")
-                with col2:
-                    new_nb_pistes_entree = st.number_input("Pistes entrée fermées (0 = ne pas modifier)", min_value=0, value=0, key="ext_edit_pistes_e")
-                    new_nb_pistes_sortie = st.number_input("Pistes sortie fermées (0 = ne pas modifier)", min_value=0, value=0, key="ext_edit_pistes_s")
+                new_fermeture = st.checkbox(
+                    "🚫 Fermeture totale",
+                    value=bool(evt_row.get('FERMETURE_TOTALE')),
+                    key=f"ext_edit_ferm_{code_edit}"
+                )
+                if not new_fermeture:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        new_nb_places = st.number_input("Nb places impactées (0 = ne pas modifier)", min_value=0, value=0, key=f"ext_edit_places_{code_edit}")
+                    with col2:
+                        new_nb_pistes_entree = st.number_input("Pistes entrée fermées (0 = ne pas modifier)", min_value=0, value=0, key=f"ext_edit_pistes_e_{code_edit}")
+                        new_nb_pistes_sortie = st.number_input("Pistes sortie fermées (0 = ne pas modifier)", min_value=0, value=0, key=f"ext_edit_pistes_s_{code_edit}")
+                else:
+                    st.info("🚫 Fermeture totale : les places impactées = capacité totale du parking.")
+                    new_nb_places = 0
+                    new_nb_pistes_entree = 0
+                    new_nb_pistes_sortie = 0
 
-                new_commentaire = st.text_input("Commentaire", placeholder="Laisser vide pour conserver", max_chars=2000)
+                new_commentaire = st.text_input("Commentaire", placeholder="Laisser vide pour conserver", max_chars=2000, key=f"ext_edit_comm_{code_edit}")
 
                 parking_options_edit = dict(zip(df_parkings_edit["NOM_PARC"], df_parkings_edit["CODE_PARC"]))
-                new_parkings = st.multiselect("Parkings (sélectionner pour remplacer)", options=list(parking_options_edit.keys()), default=[], key="ext_edit_park")
+                new_parkings = st.multiselect("Parkings (sélectionner pour remplacer)", options=list(parking_options_edit.keys()), default=[], key=f"ext_edit_park_{code_edit}")
 
-                submitted_edit = st.form_submit_button("💾 Enregistrer", type="primary")
-
-                if submitted_edit:
+                st.markdown("---")
+                if st.button("💾 Enregistrer", type="primary", key=f"btn_edit_ext_{code_edit}"):
                     set_parts = []
                     if new_titre.strip():
                         set_parts.append(f"TITRE_EVENEMENT = '{new_titre.replace(chr(39), chr(39)+chr(39))}'")
@@ -347,13 +356,15 @@ with tab_edit:
                     if new_date_fin is not None:
                         h = new_heure_fin.strftime("%H:%M:%S") if new_heure_fin else "00:00:00"
                         set_parts.append(f"DATE_FIN = '{new_date_fin} {h}'")
-                    if new_nb_places > 0:
+                    if new_fermeture:
+                        set_parts.append("FERMETURE_TOTALE = TRUE")
+                        set_parts.append("IS_PLACES_IMPACTEES = TRUE")
+                        set_parts.append("NB_PLACES_IMPACTEES = NULL")
+                    elif not new_fermeture and bool(evt_row.get('FERMETURE_TOTALE')):
+                        set_parts.append("FERMETURE_TOTALE = FALSE")
+                    if not new_fermeture and new_nb_places > 0:
                         set_parts.append(f"NB_PLACES_IMPACTEES = {new_nb_places}")
                         set_parts.append("IS_PLACES_IMPACTEES = TRUE")
-                    if new_fermeture == "Oui":
-                        set_parts.append("FERMETURE_TOTALE = TRUE")
-                    elif new_fermeture == "Non":
-                        set_parts.append("FERMETURE_TOTALE = FALSE")
                     if new_nb_pistes_entree > 0:
                         set_parts.append(f"NB_PISTES_ENTREE_FERMEES = {new_nb_pistes_entree}")
                         set_parts.append("IS_PISTES_IMPACTEES = TRUE")
