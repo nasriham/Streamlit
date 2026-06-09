@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 from core.queries import (
-    get_evenements, get_ref_types, get_ref_descriptions, get_ref_lieux, get_ref_impacts,
+    get_evenements, get_ref_types, get_ref_descriptions, get_ref_impacts,
     get_parkings, get_parcs_evenement, get_historique_complet,
     insert_evenement, update_evenement, delete_evenement,
     insert_parc_evenement, delete_parcs_evenement, get_max_code_evenement,
@@ -40,7 +40,7 @@ df_events_tech = df_all_events[df_all_events["CATEGORIE"] == CATEGORIE] if not d
 # ===== TAB: RECHERCHE =====
 with tab_search:
     st.subheader("Rechercher un événement technique")
-    search_term = st.text_input("🔍 Recherche (titre, type, lieu, ID...)", placeholder="Tapez votre recherche ici...")
+    search_term = st.text_input("🔍 Recherche (titre, type, ID...)", placeholder="Tapez votre recherche ici...")
 
     if df_events_tech.empty:
         st.info("Aucun événement technique actif.")
@@ -50,7 +50,7 @@ with tab_search:
 
         if not df_results.empty:
             display_cols = ["CODE_EVENEMENT", "TITRE_EVENEMENT", "TYPE_EVENEMENT",
-                            "DESCRIPTION", "LIEU", "IMPACT",
+                            "DESCRIPTION", "IMPACT",
                             "DATE_DEBUT", "DATE_FIN", "CRENEAU",
                             "NB_PLACES_IMPACTEES", "FERMETURE_TOTALE",
                             "TYPE_TRAVAUX", "CONTACT_INTERNE", "IS_TRAVAUX_PHASES",
@@ -62,7 +62,6 @@ with tab_search:
                     "TITRE_EVENEMENT": st.column_config.TextColumn("Titre", width="medium"),
                     "TYPE_EVENEMENT": st.column_config.TextColumn("Type"),
                     "DESCRIPTION": st.column_config.TextColumn("Description"),
-                    "LIEU": st.column_config.TextColumn("Lieu"),
                     "IMPACT": st.column_config.TextColumn("Impact"),
                     "DATE_DEBUT": st.column_config.DatetimeColumn("Début", format="DD/MM/YYYY HH:mm"),
                     "DATE_FIN": st.column_config.DatetimeColumn("Fin", format="DD/MM/YYYY HH:mm"),
@@ -142,7 +141,6 @@ with tab_create:
 
     df_types = get_ref_types()
     df_types_tech = df_types[(df_types["CATEGORIE"] == CATEGORIE) & (df_types["IS_TRAVAUX"] == False)]
-    df_lieux = get_ref_lieux()
     df_impacts = get_ref_impacts()
     df_parkings = get_parkings()
 
@@ -180,18 +178,13 @@ with tab_create:
     if selected_desc == "Autre":
         description_autre = st.text_input("Préciser la description", max_chars=500, key=f"tech_desc_autre_{v}")
 
-    # -- Lieu et Impact --
-    st.markdown("##### Localisation et impact")
-    col1, col2 = st.columns(2)
-    with col1:
-        lieu_options = dict(zip(df_lieux["VILLE"] + " - " + df_lieux["LIBELLE_LIEU"], df_lieux["CODE_LIEU"]))
-        selected_lieu = st.selectbox("Lieu", options=[""] + list(lieu_options.keys()), index=0, key=f"tech_lieu_{v}")
-    with col2:
-        impact_options = dict(zip(
-            df_impacts["LIBELLE_IMPACT"] + " (niv. " + df_impacts["NIVEAU_SEVERITE"].astype(str) + ")",
-            df_impacts["CODE_IMPACT"]
-        ))
-        selected_impact = st.selectbox("Impact", options=[""] + list(impact_options.keys()), index=0, key=f"tech_impact_{v}")
+    # -- Impact --
+    st.markdown("##### Impact")
+    impact_options = dict(zip(
+        df_impacts["LIBELLE_IMPACT"] + " (niv. " + df_impacts["NIVEAU_SEVERITE"].astype(str) + ")",
+        df_impacts["CODE_IMPACT"]
+    ))
+    selected_impact = st.selectbox("Impact", options=[""] + list(impact_options.keys()), index=0, key=f"tech_impact_{v}")
 
     # -- Dates --
     st.markdown("##### Dates")
@@ -272,7 +265,6 @@ with tab_create:
             if selected_desc and selected_desc != "Autre" and selected_desc in desc_options:
                 code_description = int(desc_options[selected_desc])
 
-            code_lieu = int(lieu_options[selected_lieu]) if selected_lieu else None
             code_impact = int(impact_options[selected_impact]) if selected_impact else None
 
             insert_evenement(
@@ -280,7 +272,7 @@ with tab_create:
                 code_type=code_type_final,
                 code_description=code_description,
                 description_autre=description_autre if selected_desc == "Autre" else None,
-                code_lieu=code_lieu,
+                code_lieu=None,
                 code_impact=code_impact,
                 timestamp_debut=timestamp_debut,
                 timestamp_fin_sql=timestamp_fin_sql,
@@ -446,7 +438,7 @@ with tab_edit:
                                 fin = pd.to_datetime(phase_row['DATE_FIN']).strftime('%d/%m/%Y') if pd.notna(phase_row['DATE_FIN']) else '?'
                                 places = int(phase_row['NB_PLACES_IMPACTEES']) if pd.notna(phase_row.get('NB_PLACES_IMPACTEES')) else '-'
                                 comm = phase_row.get('COMMENTAIRE', '') or ''
-                                st.markdown(f"**Phase {num_ph}** : {debut} → {fin} | {places} places | {comm}")
+                                st.markdown(f"**Phase {num_ph}** : {debut} → {fin} | {places} places fermées | {comm}")
                             with col_edit:
                                 if st.button("✏️", key=f"edit_ph_{code_ph}", help="Modifier cette phase"):
                                     st.session_state[f"editing_phase_{code_ph}"] = True

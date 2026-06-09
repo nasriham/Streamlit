@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 from core.queries import (
-    get_evenements, get_ref_types, get_ref_lieux, get_ref_impacts,
+    get_evenements, get_ref_types, get_ref_impacts,
     get_parkings, get_parcs_evenement, get_historique_complet,
     insert_evenement, update_evenement, delete_evenement,
     insert_parc_evenement, delete_parcs_evenement, get_max_code_evenement,
@@ -60,7 +60,6 @@ with tab_search:
         st.caption(f"{len(df_travaux)} travaux actif(s)")
         display_cols = ["CODE_EVENEMENT", "TITRE_EVENEMENT", "TYPE_EVENEMENT",
                         "TYPE_TRAVAUX", "CONTACT_INTERNE", "CONTACT_EXTERNE",
-                        "LIEU", "DATE_DEBUT", "DATE_FIN",
                         "NB_PLACES_IMPACTEES", "FERMETURE_TOTALE", "IS_TRAVAUX_PHASES",
                         "COMMENTAIRE"]
         available_cols = [c for c in display_cols if c in df_travaux.columns]
@@ -72,7 +71,6 @@ with tab_search:
                 "TYPE_TRAVAUX": st.column_config.TextColumn("Int./Ext."),
                 "CONTACT_INTERNE": st.column_config.TextColumn("Contact int."),
                 "CONTACT_EXTERNE": st.column_config.TextColumn("Contact ext."),
-                "LIEU": st.column_config.TextColumn("Lieu"),
                 "DATE_DEBUT": st.column_config.DatetimeColumn("Début", format="DD/MM/YYYY"),
                 "DATE_FIN": st.column_config.DatetimeColumn("Fin", format="DD/MM/YYYY"),
                 "NB_PLACES_IMPACTEES": st.column_config.NumberColumn("Places impactées"),
@@ -354,7 +352,6 @@ with tab_create:
 
     df_types = get_ref_types()
     df_types_trav = df_types[df_types["IS_TRAVAUX"] == True]
-    df_lieux = get_ref_lieux()
     df_impacts = get_ref_impacts()
     df_parkings = get_parkings()
 
@@ -513,18 +510,13 @@ with tab_create:
         for j, p in enumerate(st.session_state["phases_list"]):
             p["numero"] = j + 1
 
-    # -- Lieu et Impact --
-    st.markdown("##### Localisation et impact")
-    col1, col2 = st.columns(2)
-    with col1:
-        lieu_options = dict(zip(df_lieux["VILLE"] + " - " + df_lieux["LIBELLE_LIEU"], df_lieux["CODE_LIEU"]))
-        selected_lieu = st.selectbox("Lieu", options=[""] + list(lieu_options.keys()), index=0, key=f"trav_lieu_{v}")
-    with col2:
-        impact_options = dict(zip(
-            df_impacts["LIBELLE_IMPACT"] + " (niv. " + df_impacts["NIVEAU_SEVERITE"].astype(str) + ")",
-            df_impacts["CODE_IMPACT"]
-        ))
-        selected_impact = st.selectbox("Impact", options=[""] + list(impact_options.keys()), index=0, key=f"trav_impact_{v}")
+    # -- Impact --
+    st.markdown("##### Impact")
+    impact_options = dict(zip(
+        df_impacts["LIBELLE_IMPACT"] + " (niv. " + df_impacts["NIVEAU_SEVERITE"].astype(str) + ")",
+        df_impacts["CODE_IMPACT"]
+    ))
+    selected_impact = st.selectbox("Impact", options=[""] + list(impact_options.keys()), index=0, key=f"trav_impact_{v}")
 
     # -- Commentaire --
     commentaire = st.text_area("Commentaire général", max_chars=2000, key=f"trav_comm_{v}")
@@ -556,7 +548,6 @@ with tab_create:
             timestamp_debut = f"{date_debut} 00:00:00"
             timestamp_fin_sql = f"'{date_fin} 23:59:00'"
 
-            code_lieu = int(lieu_options[selected_lieu]) if selected_lieu else None
             code_impact = int(impact_options[selected_impact]) if selected_impact else None
 
             insert_evenement(
@@ -564,7 +555,7 @@ with tab_create:
                 code_type=code_type_final,
                 code_description=None,
                 description_autre=None,
-                code_lieu=code_lieu,
+                code_lieu=None,
                 code_impact=code_impact,
                 timestamp_debut=timestamp_debut,
                 timestamp_fin_sql=timestamp_fin_sql,
@@ -727,7 +718,7 @@ with tab_edit:
                             fin = pd.to_datetime(phase_row['DATE_FIN']).strftime('%d/%m/%Y') if pd.notna(phase_row['DATE_FIN']) else '?'
                             places = int(phase_row['NB_PLACES_IMPACTEES']) if pd.notna(phase_row.get('NB_PLACES_IMPACTEES')) else '-'
                             comm = phase_row.get('COMMENTAIRE', '') or ''
-                            st.markdown(f"**Phase {num_ph}** : {debut} → {fin} | {places} places | {comm}")
+                            st.markdown(f"**Phase {num_ph}** : {debut} → {fin} | {places} places fermées | {comm}")
                         with col_edit:
                             if st.button("✏️", key=f"edit_ph_trav_{code_ph}", help="Modifier cette phase"):
                                 st.session_state[f"editing_phase_trav_{code_ph}"] = True
