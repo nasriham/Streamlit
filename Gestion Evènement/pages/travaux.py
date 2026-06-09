@@ -280,13 +280,13 @@ with tab_search:
                 if gantt_externes:
                     df_gantt_ext = pd.DataFrame(gantt_externes)
                     st.vega_lite_chart(df_gantt_ext, {
-                        "mark": {"type": "bar", "cornerRadiusEnd": 4},
+                        "mark": {"type": "bar", "cornerRadiusEnd": 4, "height": 20},
                         "encoding": {
                             "y": {
                                 "field": "Tâche",
-                                "type": "nominal",
+                                "type": "ordinal",
                                 "sort": None,
-                                "axis": {"title": "", "labelLimit": 400}
+                                "axis": {"title": "", "labelLimit": 500, "labelOverlap": False}
                             },
                             "x": {
                                 "field": "Début",
@@ -308,7 +308,7 @@ with tab_search:
                                 {"field": "Fin", "type": "temporal", "format": "%d/%m/%Y"}
                             ]
                         },
-                        "height": max(150, len(gantt_externes) * 30),
+                        "height": max(200, len(gantt_externes) * 40),
                         "title": "Travaux externes — Impact multi-parkings (avec phases)"
                     }, use_container_width=True)
                 else:
