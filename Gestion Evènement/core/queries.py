@@ -15,8 +15,6 @@ def get_evenements():
             t.CATEGORIE,
             e.CODE_DESCRIPTION,
             COALESCE(d.LIBELLE_DESCRIPTION, e.DESCRIPTION_AUTRE) AS DESCRIPTION,
-            e.CODE_LIEU,
-            l.LIBELLE_LIEU AS LIEU,
             l.VILLE,
             e.CODE_IMPACT,
             i.LIBELLE_IMPACT AS IMPACT,
@@ -87,6 +85,12 @@ def get_ref_impacts():
     return run_query(
         f"SELECT CODE_IMPACT, LIBELLE_IMPACT, NIVEAU_SEVERITE FROM {SCHEMA}.T_R_IMPACT_EVENEMENT WHERE IS_ACTIVE = TRUE ORDER BY NIVEAU_SEVERITE",
         ttl=0
+    )
+
+
+def get_contacts_internes():
+    return run_query(
+        f"SELECT CODE_CONTACT, NOM, EMAIL, SERVICE FROM {SCHEMA}.T_R_CONTACT_INTERNE WHERE IS_ACTIVE = TRUE ORDER BY NOM"
     )
 
 
@@ -171,9 +175,9 @@ def update_phase(code_phase: int, date_debut: str, date_fin: str, nb_places, com
 def insert_evenement(titre, code_type, code_description, description_autre, code_lieu, code_impact,
                      timestamp_debut, timestamp_fin_sql, is_journee_partielle, creneau,
                      is_places_impactees, nb_places_impactees, fermeture_totale,
-                     is_pistes_impactees, nb_pistes_entree, nb_pistes_sortie,
-                     type_travaux, contact_interne, contact_externe, is_travaux_phases,
-                     commentaire, user):
+                     is_pistes_impactees, nb_pistes_entree, nb_pistes_sortie, fermeture_globale_pistes=False,
+                     type_travaux=None, contact_interne=None, contact_externe=None, is_travaux_phases=False,
+                     commentaire="", user=""):
     titre_sql = titre.replace("'", "''")
     commentaire_sql = commentaire.replace("'", "''") if commentaire else ""
     description_autre_sql = f"'{description_autre.replace(chr(39), chr(39)+chr(39))}'" if description_autre else "NULL"
@@ -191,7 +195,7 @@ def insert_evenement(titre, code_type, code_description, description_autre, code
          CODE_LIEU, CODE_IMPACT, DATE_DEBUT, DATE_FIN,
          IS_JOURNEE_PARTIELLE, CRENEAU,
          IS_PLACES_IMPACTEES, NB_PLACES_IMPACTEES, FERMETURE_TOTALE,
-         IS_PISTES_IMPACTEES, NB_PISTES_ENTREE_FERMEES, NB_PISTES_SORTIE_FERMEES,
+         IS_PISTES_IMPACTEES, NB_PISTES_ENTREE_FERMEES, NB_PISTES_SORTIE_FERMEES, FERMETURE_GLOBALE_PISTES,
          TYPE_TRAVAUX, CONTACT_INTERNE, CONTACT_EXTERNE, IS_TRAVAUX_PHASES,
          COMMENTAIRE, NOM_CREATEUR, DATE_CREATION, IS_ACTIVE)
         SELECT
@@ -212,6 +216,7 @@ def insert_evenement(titre, code_type, code_description, description_autre, code
             {is_pistes_impactees},
             {nb_pistes_entree if nb_pistes_entree else 'NULL'},
             {nb_pistes_sortie if nb_pistes_sortie else 'NULL'},
+            {fermeture_globale_pistes},
             {type_travaux_sql},
             {contact_interne_sql},
             {contact_externe_sql},
@@ -266,7 +271,7 @@ def get_historique(code_evt: int = None):
     where_clause = f"WHERE CODE_EVENEMENT = {code_evt}" if code_evt else ""
     return run_query(f"""
         SELECT CODE_EVENEMENT, TITRE_EVENEMENT, TYPE_EVENEMENT, CATEGORIE, DESCRIPTION,
-               LIEU, VILLE, IMPACT, NIVEAU_SEVERITE, DATE_DEBUT, DATE_FIN,
+               VILLE, IMPACT, NIVEAU_SEVERITE, DATE_DEBUT, DATE_FIN,
                IS_JOURNEE_PARTIELLE, CRENEAU, NB_PLACES_IMPACTEES, FERMETURE_TOTALE,
                NB_PISTES_ENTREE_FERMEES, NB_PISTES_SORTIE_FERMEES,
                TYPE_TRAVAUX, CONTACT_INTERNE, CONTACT_EXTERNE, IS_TRAVAUX_PHASES,
@@ -281,7 +286,7 @@ def get_historique(code_evt: int = None):
 def get_historique_complet():
     return run_query(f"""
         SELECT CODE_EVENEMENT, TITRE_EVENEMENT, TYPE_EVENEMENT, CATEGORIE, DESCRIPTION,
-               LIEU, VILLE, IMPACT, NIVEAU_SEVERITE, DATE_DEBUT, DATE_FIN,
+               VILLE, IMPACT, NIVEAU_SEVERITE, DATE_DEBUT, DATE_FIN,
                IS_JOURNEE_PARTIELLE, CRENEAU, NB_PLACES_IMPACTEES, FERMETURE_TOTALE,
                NB_PISTES_ENTREE_FERMEES, NB_PISTES_SORTIE_FERMEES,
                TYPE_TRAVAUX, CONTACT_INTERNE, CONTACT_EXTERNE, IS_TRAVAUX_PHASES,

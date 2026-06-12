@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 from core.queries import (
-    get_evenements, get_ref_types, get_ref_descriptions, get_ref_lieux, get_ref_impacts,
+    get_evenements, get_ref_types, get_ref_descriptions, get_ref_impacts,
     get_parkings, get_parcs_evenement, get_historique_complet,
     insert_evenement, update_evenement, delete_evenement,
     insert_parc_evenement, delete_parcs_evenement, get_max_code_evenement,
@@ -39,7 +39,7 @@ df_events_ext = df_all_events[df_all_events["CATEGORIE"] == CATEGORIE] if not df
 # ===== TAB: RECHERCHE =====
 with tab_search:
     st.subheader("Rechercher un événement externe")
-    search_term = st.text_input("🔍 Recherche (titre, type, lieu, ville, impact, ID...)", placeholder="Tapez votre recherche ici...")
+    search_term = st.text_input("🔍 Recherche (titre, type, ville, impact, ID...)", placeholder="Tapez votre recherche ici...")
 
     if df_events_ext.empty:
         st.info("Aucun événement externe actif.")
@@ -49,7 +49,7 @@ with tab_search:
 
         if not df_results.empty:
             display_cols = ["CODE_EVENEMENT", "TITRE_EVENEMENT", "TYPE_EVENEMENT",
-                            "DESCRIPTION", "LIEU", "VILLE", "IMPACT",
+                            "DESCRIPTION", "VILLE", "IMPACT",
                             "DATE_DEBUT", "DATE_FIN", "CRENEAU", "NB_PLACES_IMPACTEES",
                             "FERMETURE_TOTALE", "COMMENTAIRE"]
             available_cols = [c for c in display_cols if c in df_results.columns]
@@ -59,7 +59,6 @@ with tab_search:
                     "TITRE_EVENEMENT": st.column_config.TextColumn("Titre", width="medium"),
                     "TYPE_EVENEMENT": st.column_config.TextColumn("Type"),
                     "DESCRIPTION": st.column_config.TextColumn("Description"),
-                    "LIEU": st.column_config.TextColumn("Lieu"),
                     "VILLE": st.column_config.TextColumn("Ville"),
                     "IMPACT": st.column_config.TextColumn("Impact"),
                     "DATE_DEBUT": st.column_config.DatetimeColumn("Début", format="DD/MM/YYYY HH:mm"),
@@ -82,7 +81,6 @@ with tab_create:
 
     df_types = get_ref_types()
     df_types_ext = df_types[df_types["CATEGORIE"] == CATEGORIE]
-    df_lieux = get_ref_lieux()
     df_impacts = get_ref_impacts()
     df_parkings = get_parkings()
 
@@ -124,18 +122,13 @@ with tab_create:
     if selected_desc == "Autre":
         description_autre = st.text_input("Préciser la description", max_chars=500, key=f"ext_desc_autre_{v}")
 
-    # -- Lieu et Impact --
-    st.markdown("##### Localisation et impact")
-    col1, col2 = st.columns(2)
-    with col1:
-        lieu_options = dict(zip(df_lieux["VILLE"] + " - " + df_lieux["LIBELLE_LIEU"], df_lieux["CODE_LIEU"]))
-        selected_lieu = st.selectbox("Ville / Secteur", options=[""] + list(lieu_options.keys()), index=0, key=f"ext_lieu_{v}")
-    with col2:
-        impact_options = dict(zip(
-            df_impacts["LIBELLE_IMPACT"] + " (niv. " + df_impacts["NIVEAU_SEVERITE"].astype(str) + ")",
-            df_impacts["CODE_IMPACT"]
-        ))
-        selected_impact = st.selectbox("Impact", options=[""] + list(impact_options.keys()), index=0, key=f"ext_impact_{v}")
+    # -- Impact --
+    st.markdown("##### Impact")
+    impact_options = dict(zip(
+        df_impacts["LIBELLE_IMPACT"] + " (niv. " + df_impacts["NIVEAU_SEVERITE"].astype(str) + ")",
+        df_impacts["CODE_IMPACT"]
+    ))
+    selected_impact = st.selectbox("Impact", options=[""] + list(impact_options.keys()), index=0, key=f"ext_impact_{v}")
 
     # -- Dates --
     st.markdown("##### Dates")
@@ -176,12 +169,17 @@ with tab_create:
     is_pistes_impactees = st.checkbox("🚧 Piste(s) impactée(s)", key=f"ext_pistes_cb_{v}")
     nb_pistes_entree = None
     nb_pistes_sortie = None
+    fermeture_globale_pistes = False
     if is_pistes_impactees:
-        col1, col2 = st.columns(2)
-        with col1:
-            nb_pistes_entree = st.number_input("Nb pistes ENTRÉE fermées", min_value=0, value=0, key=f"ext_pe_{v}")
-        with col2:
-            nb_pistes_sortie = st.number_input("Nb pistes SORTIE fermées", min_value=0, value=0, key=f"ext_ps_{v}")
+        fermeture_globale_pistes = st.checkbox("🚫 Fermeture globale des pistes (toutes entrées/sorties fermées)", key=f"ext_ferm_pistes_{v}")
+        if not fermeture_globale_pistes:
+            col1, col2 = st.columns(2)
+            with col1:
+                nb_pistes_entree = st.number_input("Nb pistes ENTRÉE fermées", min_value=0, value=0, key=f"ext_pe_{v}")
+            with col2:
+                nb_pistes_sortie = st.number_input("Nb pistes SORTIE fermées", min_value=0, value=0, key=f"ext_ps_{v}")
+        else:
+            st.info("🚫 Toutes les pistes (entrées et sorties) sont fermées.")
 
     # -- Commentaire --
     commentaire = st.text_area("Commentaire", max_chars=2000, key=f"ext_comm_{v}")
@@ -215,7 +213,6 @@ with tab_create:
             if selected_desc and selected_desc != "Autre" and selected_desc in desc_options:
                 code_description = int(desc_options[selected_desc])
 
-            code_lieu = int(lieu_options[selected_lieu]) if selected_lieu else None
             code_impact = int(impact_options[selected_impact]) if selected_impact else None
 
             insert_evenement(
@@ -223,7 +220,7 @@ with tab_create:
                 code_type=code_type_final,
                 code_description=code_description,
                 description_autre=description_autre if selected_desc == "Autre" else None,
-                code_lieu=code_lieu,
+                code_lieu=None,
                 code_impact=code_impact,
                 timestamp_debut=timestamp_debut,
                 timestamp_fin_sql=timestamp_fin_sql,
@@ -233,8 +230,9 @@ with tab_create:
                 nb_places_impactees=nb_places_impactees if is_places_impactees and not fermeture_totale else None,
                 fermeture_totale=fermeture_totale,
                 is_pistes_impactees=is_pistes_impactees,
-                nb_pistes_entree=nb_pistes_entree if is_pistes_impactees else None,
-                nb_pistes_sortie=nb_pistes_sortie if is_pistes_impactees else None,
+                nb_pistes_entree=nb_pistes_entree if is_pistes_impactees and not fermeture_globale_pistes else None,
+                nb_pistes_sortie=nb_pistes_sortie if is_pistes_impactees and not fermeture_globale_pistes else None,
+                fermeture_globale_pistes=fermeture_globale_pistes,
                 type_travaux=None,
                 contact_interne=None,
                 contact_externe=None,
@@ -266,7 +264,6 @@ with tab_edit:
     else:
         df_types_edit = get_ref_types()
         df_types_edit = df_types_edit[df_types_edit["CATEGORIE"] == CATEGORIE]
-        df_lieux_edit = get_ref_lieux()
         df_impacts_edit = get_ref_impacts()
         df_parkings_edit = get_parkings()
 
@@ -283,7 +280,6 @@ with tab_edit:
                     st.markdown(f"**Titre :** {evt_row['TITRE_EVENEMENT']}")
                     st.markdown(f"**Type :** {evt_row['TYPE_EVENEMENT']}")
                 with col2:
-                    st.markdown(f"**Lieu :** {evt_row.get('LIEU', '-')}")
                     st.markdown(f"**Impact :** {evt_row.get('IMPACT', '-')}")
                     st.markdown(f"**Places impactées :** {int(evt_row['NB_PLACES_IMPACTEES']) if pd.notna(evt_row.get('NB_PLACES_IMPACTEES')) else '-'}")
                 with col3:
@@ -296,16 +292,11 @@ with tab_edit:
                 type_options_edit = dict(zip(df_types_edit["LIBELLE_TYPE_EVENEMENT"], df_types_edit["CODE_TYPE_EVENEMENT"]))
                 new_type = st.selectbox("Type", options=["-- Ne pas modifier --"] + list(type_options_edit.keys()), key=f"ext_edit_type_{code_edit}")
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    lieu_options_edit = dict(zip(df_lieux_edit["VILLE"] + " - " + df_lieux_edit["LIBELLE_LIEU"], df_lieux_edit["CODE_LIEU"]))
-                    new_lieu = st.selectbox("Lieu", options=["-- Ne pas modifier --"] + list(lieu_options_edit.keys()), key=f"ext_edit_lieu_{code_edit}")
-                with col2:
-                    impact_options_edit = dict(zip(
-                        df_impacts_edit["LIBELLE_IMPACT"] + " (niv. " + df_impacts_edit["NIVEAU_SEVERITE"].astype(str) + ")",
-                        df_impacts_edit["CODE_IMPACT"]
-                    ))
-                    new_impact = st.selectbox("Impact", options=["-- Ne pas modifier --"] + list(impact_options_edit.keys()), key=f"ext_edit_impact_{code_edit}")
+                impact_options_edit = dict(zip(
+                    df_impacts_edit["LIBELLE_IMPACT"] + " (niv. " + df_impacts_edit["NIVEAU_SEVERITE"].astype(str) + ")",
+                    df_impacts_edit["CODE_IMPACT"]
+                ))
+                new_impact = st.selectbox("Impact", options=["-- Ne pas modifier --"] + list(impact_options_edit.keys()), key=f"ext_edit_impact_{code_edit}")
 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -346,8 +337,6 @@ with tab_edit:
                         set_parts.append(f"TITRE_EVENEMENT = '{new_titre.replace(chr(39), chr(39)+chr(39))}'")
                     if new_type != "-- Ne pas modifier --":
                         set_parts.append(f"CODE_TYPE_EVENEMENT = {type_options_edit[new_type]}")
-                    if new_lieu != "-- Ne pas modifier --":
-                        set_parts.append(f"CODE_LIEU = {lieu_options_edit[new_lieu]}")
                     if new_impact != "-- Ne pas modifier --":
                         set_parts.append(f"CODE_IMPACT = {impact_options_edit[new_impact]}")
                     if new_date_debut is not None:

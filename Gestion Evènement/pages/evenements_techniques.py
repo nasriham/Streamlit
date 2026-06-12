@@ -2,13 +2,14 @@ import streamlit as st
 import pandas as pd
 
 from core.queries import (
-    get_evenements, get_ref_types, get_ref_descriptions, get_ref_lieux, get_ref_impacts,
+    get_evenements, get_ref_types, get_ref_descriptions, get_ref_impacts,
     get_parkings, get_parcs_evenement, get_historique_complet,
     insert_evenement, update_evenement, delete_evenement,
     insert_parc_evenement, delete_parcs_evenement, get_max_code_evenement,
     get_phases_travaux, get_all_phases_travaux, insert_phase_travaux, delete_phases_travaux, delete_phase_by_id, update_phase,
     insert_type_evenement,
-    close_all_snapshots, recalculer_disponibilite
+    close_all_snapshots, recalculer_disponibilite,
+    get_contacts_internes
 )
 from core.functions import (
     get_current_user, search_evenements, log_modification,
@@ -40,7 +41,7 @@ df_events_tech = df_all_events[df_all_events["CATEGORIE"] == CATEGORIE] if not d
 # ===== TAB: RECHERCHE =====
 with tab_search:
     st.subheader("Rechercher un événement technique")
-    search_term = st.text_input("🔍 Recherche (titre, type, lieu, ID...)", placeholder="Tapez votre recherche ici...")
+    search_term = st.text_input("🔍 Recherche (titre, type, ID...)", placeholder="Tapez votre recherche ici...")
 
     if df_events_tech.empty:
         st.info("Aucun événement technique actif.")
@@ -50,7 +51,7 @@ with tab_search:
 
         if not df_results.empty:
             display_cols = ["CODE_EVENEMENT", "TITRE_EVENEMENT", "TYPE_EVENEMENT",
-                            "DESCRIPTION", "LIEU", "IMPACT",
+                            "DESCRIPTION", "IMPACT",
                             "DATE_DEBUT", "DATE_FIN", "CRENEAU",
                             "NB_PLACES_IMPACTEES", "FERMETURE_TOTALE",
                             "TYPE_TRAVAUX", "CONTACT_INTERNE", "IS_TRAVAUX_PHASES",
@@ -62,7 +63,6 @@ with tab_search:
                     "TITRE_EVENEMENT": st.column_config.TextColumn("Titre", width="medium"),
                     "TYPE_EVENEMENT": st.column_config.TextColumn("Type"),
                     "DESCRIPTION": st.column_config.TextColumn("Description"),
-                    "LIEU": st.column_config.TextColumn("Lieu"),
                     "IMPACT": st.column_config.TextColumn("Impact"),
                     "DATE_DEBUT": st.column_config.DatetimeColumn("Début", format="DD/MM/YYYY HH:mm"),
                     "DATE_FIN": st.column_config.DatetimeColumn("Fin", format="DD/MM/YYYY HH:mm"),
@@ -142,7 +142,6 @@ with tab_create:
 
     df_types = get_ref_types()
     df_types_tech = df_types[(df_types["CATEGORIE"] == CATEGORIE) & (df_types["IS_TRAVAUX"] == False)]
-    df_lieux = get_ref_lieux()
     df_impacts = get_ref_impacts()
     df_parkings = get_parkings()
 
@@ -166,6 +165,19 @@ with tab_create:
             key=f"tech_new_type_{v}"
         )
 
+    # -- Contacts --
+    st.markdown("##### 👤 Contacts")
+    df_contacts = get_contacts_internes()
+    contact_options = {f"{row['NOM']} — {row['EMAIL']}": f"{row['NOM']} ({row['EMAIL']})" for _, row in df_contacts.iterrows()} if not df_contacts.empty else {}
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_contact = st.selectbox("Contact interne Metpark",
+            options=[""] + list(contact_options.keys()), index=0, key=f"tech_ci_{v}")
+    with col2:
+        contact_externe = st.text_input("Nom de la société (externe)", max_chars=200,
+            placeholder="Ex: Vinci, Bouygues, Eiffage...", key=f"tech_ce_{v}")
+    contact_interne = contact_options[selected_contact] if selected_contact else None
+
     # -- Description prédéfinie --
     selected_desc = ""
     description_autre = ""
@@ -180,18 +192,13 @@ with tab_create:
     if selected_desc == "Autre":
         description_autre = st.text_input("Préciser la description", max_chars=500, key=f"tech_desc_autre_{v}")
 
-    # -- Lieu et Impact --
-    st.markdown("##### Localisation et impact")
-    col1, col2 = st.columns(2)
-    with col1:
-        lieu_options = dict(zip(df_lieux["VILLE"] + " - " + df_lieux["LIBELLE_LIEU"], df_lieux["CODE_LIEU"]))
-        selected_lieu = st.selectbox("Lieu", options=[""] + list(lieu_options.keys()), index=0, key=f"tech_lieu_{v}")
-    with col2:
-        impact_options = dict(zip(
-            df_impacts["LIBELLE_IMPACT"] + " (niv. " + df_impacts["NIVEAU_SEVERITE"].astype(str) + ")",
-            df_impacts["CODE_IMPACT"]
-        ))
-        selected_impact = st.selectbox("Impact", options=[""] + list(impact_options.keys()), index=0, key=f"tech_impact_{v}")
+    # -- Impact --
+    st.markdown("##### Impact")
+    impact_options = dict(zip(
+        df_impacts["LIBELLE_IMPACT"] + " (niv. " + df_impacts["NIVEAU_SEVERITE"].astype(str) + ")",
+        df_impacts["CODE_IMPACT"]
+    ))
+    selected_impact = st.selectbox("Impact", options=[""] + list(impact_options.keys()), index=0, key=f"tech_impact_{v}")
 
     # -- Dates --
     st.markdown("##### Dates")
@@ -232,12 +239,17 @@ with tab_create:
     is_pistes_impactees = st.checkbox("🚧 Piste(s) impactée(s)", key=f"tech_pistes_cb_{v}")
     nb_pistes_entree = None
     nb_pistes_sortie = None
+    fermeture_globale_pistes = False
     if is_pistes_impactees:
-        col1, col2 = st.columns(2)
-        with col1:
-            nb_pistes_entree = st.number_input("Nb pistes ENTRÉE fermées", min_value=0, value=0, key=f"tech_pe_{v}")
-        with col2:
-            nb_pistes_sortie = st.number_input("Nb pistes SORTIE fermées", min_value=0, value=0, key=f"tech_ps_{v}")
+        fermeture_globale_pistes = st.checkbox("🚫 Fermeture globale des pistes (toutes entrées/sorties fermées)", key=f"tech_ferm_pistes_{v}")
+        if not fermeture_globale_pistes:
+            col1, col2 = st.columns(2)
+            with col1:
+                nb_pistes_entree = st.number_input("Nb pistes ENTRÉE fermées", min_value=0, value=0, key=f"tech_pe_{v}")
+            with col2:
+                nb_pistes_sortie = st.number_input("Nb pistes SORTIE fermées", min_value=0, value=0, key=f"tech_ps_{v}")
+        else:
+            st.info("🚫 Toutes les pistes (entrées et sorties) sont fermées.")
 
     # -- Commentaire --
     commentaire = st.text_area("Commentaire", max_chars=2000, key=f"tech_comm_{v}")
@@ -272,7 +284,6 @@ with tab_create:
             if selected_desc and selected_desc != "Autre" and selected_desc in desc_options:
                 code_description = int(desc_options[selected_desc])
 
-            code_lieu = int(lieu_options[selected_lieu]) if selected_lieu else None
             code_impact = int(impact_options[selected_impact]) if selected_impact else None
 
             insert_evenement(
@@ -280,7 +291,7 @@ with tab_create:
                 code_type=code_type_final,
                 code_description=code_description,
                 description_autre=description_autre if selected_desc == "Autre" else None,
-                code_lieu=code_lieu,
+                code_lieu=None,
                 code_impact=code_impact,
                 timestamp_debut=timestamp_debut,
                 timestamp_fin_sql=timestamp_fin_sql,
@@ -290,11 +301,12 @@ with tab_create:
                 nb_places_impactees=nb_places_impactees if is_places_impactees and not fermeture_totale else None,
                 fermeture_totale=fermeture_totale,
                 is_pistes_impactees=is_pistes_impactees,
-                nb_pistes_entree=nb_pistes_entree if is_pistes_impactees else None,
-                nb_pistes_sortie=nb_pistes_sortie if is_pistes_impactees else None,
+                nb_pistes_entree=nb_pistes_entree if is_pistes_impactees and not fermeture_globale_pistes else None,
+                nb_pistes_sortie=nb_pistes_sortie if is_pistes_impactees and not fermeture_globale_pistes else None,
+                fermeture_globale_pistes=fermeture_globale_pistes,
                 type_travaux=None,
-                contact_interne=None,
-                contact_externe=None,
+                contact_interne=contact_interne,
+                contact_externe=contact_externe if contact_externe.strip() else None,
                 is_travaux_phases=False,
                 commentaire=commentaire,
                 user=sf_user
@@ -378,8 +390,12 @@ with tab_edit:
                     st.info("🚫 Fermeture totale : les places impactées = capacité totale du parking.")
                     new_nb_places = 0
 
-                new_contact_interne = st.text_input("Contact interne", placeholder="Laisser vide pour conserver", key=f"tech_edit_ci_{code_edit}")
-                new_contact_externe = st.text_input("Contact externe", placeholder="Laisser vide pour conserver", key=f"tech_edit_ce_{code_edit}")
+                df_contacts_edit = get_contacts_internes()
+                contact_opts_edit = {f"{row['NOM']} — {row['EMAIL']}": f"{row['NOM']} ({row['EMAIL']})" for _, row in df_contacts_edit.iterrows()} if not df_contacts_edit.empty else {}
+                new_selected_contact = st.selectbox("Contact interne Metpark",
+                    options=["(conserver)"] + list(contact_opts_edit.keys()), index=0, key=f"tech_edit_ci_{code_edit}")
+                new_contact_interne = contact_opts_edit[new_selected_contact] if new_selected_contact != "(conserver)" else ""
+                new_contact_externe = st.text_input("Nom de la société (externe)", placeholder="Laisser vide pour conserver", key=f"tech_edit_ce_{code_edit}")
 
                 parking_options_edit = dict(zip(df_parkings_edit["NOM_PARC"], df_parkings_edit["CODE_PARC"]))
                 new_parkings = st.multiselect("Parkings (sélectionner pour remplacer)", options=list(parking_options_edit.keys()), default=[], key=f"tech_edit_park_{code_edit}")
@@ -446,7 +462,7 @@ with tab_edit:
                                 fin = pd.to_datetime(phase_row['DATE_FIN']).strftime('%d/%m/%Y') if pd.notna(phase_row['DATE_FIN']) else '?'
                                 places = int(phase_row['NB_PLACES_IMPACTEES']) if pd.notna(phase_row.get('NB_PLACES_IMPACTEES')) else '-'
                                 comm = phase_row.get('COMMENTAIRE', '') or ''
-                                st.markdown(f"**Phase {num_ph}** : {debut} → {fin} | {places} places | {comm}")
+                                st.markdown(f"**Phase {num_ph}** : {debut} → {fin} | {places} places fermées | {comm}")
                             with col_edit:
                                 if st.button("✏️", key=f"edit_ph_{code_ph}", help="Modifier cette phase"):
                                     st.session_state[f"editing_phase_{code_ph}"] = True
