@@ -169,12 +169,17 @@ with tab_create:
     is_pistes_impactees = st.checkbox("🚧 Piste(s) impactée(s)", key=f"ext_pistes_cb_{v}")
     nb_pistes_entree = None
     nb_pistes_sortie = None
+    fermeture_globale_pistes = False
     if is_pistes_impactees:
-        col1, col2 = st.columns(2)
-        with col1:
-            nb_pistes_entree = st.number_input("Nb pistes ENTRÉE fermées", min_value=0, value=0, key=f"ext_pe_{v}")
-        with col2:
-            nb_pistes_sortie = st.number_input("Nb pistes SORTIE fermées", min_value=0, value=0, key=f"ext_ps_{v}")
+        fermeture_globale_pistes = st.checkbox("🚫 Fermeture globale des pistes (toutes entrées/sorties fermées)", key=f"ext_ferm_pistes_{v}")
+        if not fermeture_globale_pistes:
+            col1, col2 = st.columns(2)
+            with col1:
+                nb_pistes_entree = st.number_input("Nb pistes ENTRÉE fermées", min_value=0, value=0, key=f"ext_pe_{v}")
+            with col2:
+                nb_pistes_sortie = st.number_input("Nb pistes SORTIE fermées", min_value=0, value=0, key=f"ext_ps_{v}")
+        else:
+            st.info("🚫 Toutes les pistes (entrées et sorties) sont fermées.")
 
     # -- Commentaire --
     commentaire = st.text_area("Commentaire", max_chars=2000, key=f"ext_comm_{v}")
@@ -225,8 +230,9 @@ with tab_create:
                 nb_places_impactees=nb_places_impactees if is_places_impactees and not fermeture_totale else None,
                 fermeture_totale=fermeture_totale,
                 is_pistes_impactees=is_pistes_impactees,
-                nb_pistes_entree=nb_pistes_entree if is_pistes_impactees else None,
-                nb_pistes_sortie=nb_pistes_sortie if is_pistes_impactees else None,
+                nb_pistes_entree=nb_pistes_entree if is_pistes_impactees and not fermeture_globale_pistes else None,
+                nb_pistes_sortie=nb_pistes_sortie if is_pistes_impactees and not fermeture_globale_pistes else None,
+                fermeture_globale_pistes=fermeture_globale_pistes,
                 type_travaux=None,
                 contact_interne=None,
                 contact_externe=None,

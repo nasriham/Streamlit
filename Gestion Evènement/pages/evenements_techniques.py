@@ -8,7 +8,8 @@ from core.queries import (
     insert_parc_evenement, delete_parcs_evenement, get_max_code_evenement,
     get_phases_travaux, get_all_phases_travaux, insert_phase_travaux, delete_phases_travaux, delete_phase_by_id, update_phase,
     insert_type_evenement,
-    close_all_snapshots, recalculer_disponibilite
+    close_all_snapshots, recalculer_disponibilite,
+    get_contacts_internes
 )
 from core.functions import (
     get_current_user, search_evenements, log_modification,
@@ -164,6 +165,19 @@ with tab_create:
             key=f"tech_new_type_{v}"
         )
 
+    # -- Contacts --
+    st.markdown("##### 👤 Contacts")
+    df_contacts = get_contacts_internes()
+    contact_options = {f"{row['NOM']} — {row['EMAIL']}": f"{row['NOM']} ({row['EMAIL']})" for _, row in df_contacts.iterrows()} if not df_contacts.empty else {}
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_contact = st.selectbox("Contact interne Metpark",
+            options=[""] + list(contact_options.keys()), index=0, key=f"tech_ci_{v}")
+    with col2:
+        contact_externe = st.text_input("Nom de la société (externe)", max_chars=200,
+            placeholder="Ex: Vinci, Bouygues, Eiffage...", key=f"tech_ce_{v}")
+    contact_interne = contact_options[selected_contact] if selected_contact else None
+
     # -- Description prédéfinie --
     selected_desc = ""
     description_autre = ""
@@ -225,12 +239,17 @@ with tab_create:
     is_pistes_impactees = st.checkbox("🚧 Piste(s) impactée(s)", key=f"tech_pistes_cb_{v}")
     nb_pistes_entree = None
     nb_pistes_sortie = None
+    fermeture_globale_pistes = False
     if is_pistes_impactees:
-        col1, col2 = st.columns(2)
-        with col1:
-            nb_pistes_entree = st.number_input("Nb pistes ENTRÉE fermées", min_value=0, value=0, key=f"tech_pe_{v}")
-        with col2:
-            nb_pistes_sortie = st.number_input("Nb pistes SORTIE fermées", min_value=0, value=0, key=f"tech_ps_{v}")
+        fermeture_globale_pistes = st.checkbox("🚫 Fermeture globale des pistes (toutes entrées/sorties fermées)", key=f"tech_ferm_pistes_{v}")
+        if not fermeture_globale_pistes:
+            col1, col2 = st.columns(2)
+            with col1:
+                nb_pistes_entree = st.number_input("Nb pistes ENTRÉE fermées", min_value=0, value=0, key=f"tech_pe_{v}")
+            with col2:
+                nb_pistes_sortie = st.number_input("Nb pistes SORTIE fermées", min_value=0, value=0, key=f"tech_ps_{v}")
+        else:
+            st.info("🚫 Toutes les pistes (entrées et sorties) sont fermées.")
 
     # -- Commentaire --
     commentaire = st.text_area("Commentaire", max_chars=2000, key=f"tech_comm_{v}")
@@ -282,11 +301,12 @@ with tab_create:
                 nb_places_impactees=nb_places_impactees if is_places_impactees and not fermeture_totale else None,
                 fermeture_totale=fermeture_totale,
                 is_pistes_impactees=is_pistes_impactees,
-                nb_pistes_entree=nb_pistes_entree if is_pistes_impactees else None,
-                nb_pistes_sortie=nb_pistes_sortie if is_pistes_impactees else None,
+                nb_pistes_entree=nb_pistes_entree if is_pistes_impactees and not fermeture_globale_pistes else None,
+                nb_pistes_sortie=nb_pistes_sortie if is_pistes_impactees and not fermeture_globale_pistes else None,
+                fermeture_globale_pistes=fermeture_globale_pistes,
                 type_travaux=None,
-                contact_interne=None,
-                contact_externe=None,
+                contact_interne=contact_interne,
+                contact_externe=contact_externe if contact_externe.strip() else None,
                 is_travaux_phases=False,
                 commentaire=commentaire,
                 user=sf_user
@@ -370,8 +390,12 @@ with tab_edit:
                     st.info("🚫 Fermeture totale : les places impactées = capacité totale du parking.")
                     new_nb_places = 0
 
-                new_contact_interne = st.text_input("Contact interne", placeholder="Laisser vide pour conserver", key=f"tech_edit_ci_{code_edit}")
-                new_contact_externe = st.text_input("Contact externe", placeholder="Laisser vide pour conserver", key=f"tech_edit_ce_{code_edit}")
+                df_contacts_edit = get_contacts_internes()
+                contact_opts_edit = {f"{row['NOM']} — {row['EMAIL']}": f"{row['NOM']} ({row['EMAIL']})" for _, row in df_contacts_edit.iterrows()} if not df_contacts_edit.empty else {}
+                new_selected_contact = st.selectbox("Contact interne Metpark",
+                    options=["(conserver)"] + list(contact_opts_edit.keys()), index=0, key=f"tech_edit_ci_{code_edit}")
+                new_contact_interne = contact_opts_edit[new_selected_contact] if new_selected_contact != "(conserver)" else ""
+                new_contact_externe = st.text_input("Nom de la société (externe)", placeholder="Laisser vide pour conserver", key=f"tech_edit_ce_{code_edit}")
 
                 parking_options_edit = dict(zip(df_parkings_edit["NOM_PARC"], df_parkings_edit["CODE_PARC"]))
                 new_parkings = st.multiselect("Parkings (sélectionner pour remplacer)", options=list(parking_options_edit.keys()), default=[], key=f"tech_edit_park_{code_edit}")

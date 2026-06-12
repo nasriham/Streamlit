@@ -8,7 +8,8 @@ from core.queries import (
     insert_parc_evenement, delete_parcs_evenement, get_max_code_evenement,
     get_phases_travaux, insert_phase_travaux, delete_phases_travaux, delete_phase_by_id, update_phase,
     get_all_phases_travaux,
-    close_all_snapshots, recalculer_disponibilite
+    close_all_snapshots, recalculer_disponibilite,
+    get_contacts_internes
 )
 from core.functions import (
     get_current_user, search_evenements, log_modification,
@@ -358,30 +359,34 @@ with tab_create:
     titre = st.text_input("Titre des travaux *", max_chars=300, key=f"trav_titre_{v}",
         placeholder="Ex: Peinture sol niveau -2, Réfection barrière entrée...")
 
-    # -- Type de travaux : INTERNE / EXTERNE --
+    # -- Type de travaux : METPARK / EXTERNE --
     st.markdown("##### 🔧 Type de travaux")
     type_travaux = st.radio(
         "Les travaux sont réalisés par *",
-        options=["INTERNE", "EXTERNE"],
-        captions=["Équipe MetPark (travaux internes)", "Prestataire externe"],
+        options=["METPARK", "EXTERNE"],
+        captions=["Équipe MetPark", "Prestataire externe"],
         horizontal=True,
         key=f"trav_type_{v}"
     )
 
     # Contacts
     st.markdown("##### 👤 Contacts")
-    if type_travaux == "INTERNE":
-        contact_interne = st.text_input("Contact responsable interne *", max_chars=200,
-            placeholder="Nom, téléphone...", key=f"trav_ci_{v}")
+    df_contacts = get_contacts_internes()
+    contact_opts = {f"{row['NOM']} — {row['EMAIL']}": f"{row['NOM']} ({row['EMAIL']})" for _, row in df_contacts.iterrows()} if not df_contacts.empty else {}
+    if type_travaux == "METPARK":
+        selected_contact = st.selectbox("Contact interne Metpark *",
+            options=[""] + list(contact_opts.keys()), index=0, key=f"trav_ci_{v}")
+        contact_interne = contact_opts[selected_contact] if selected_contact else ""
         contact_externe = ""
     else:
         col1, col2 = st.columns(2)
         with col1:
-            contact_interne = st.text_input("Contact responsable interne *", max_chars=200,
-                placeholder="Nom, téléphone...", key=f"trav_ci_ext_{v}")
+            selected_contact = st.selectbox("Contact interne Metpark *",
+                options=[""] + list(contact_opts.keys()), index=0, key=f"trav_ci_ext_{v}")
+            contact_interne = contact_opts[selected_contact] if selected_contact else ""
         with col2:
-            contact_externe = st.text_input("Contact responsable externe *", max_chars=200,
-                placeholder="Entreprise / Nom / Téléphone", key=f"trav_ce_{v}")
+            contact_externe = st.text_input("Nom de la société (externe) *", max_chars=200,
+                placeholder="Ex: Vinci, Bouygues, Eiffage...", key=f"trav_ce_{v}")
 
     # -- Dates globales --
     st.markdown("##### 📅 Dates globales des travaux")
@@ -391,15 +396,21 @@ with tab_create:
     with col2:
         date_fin = st.date_input("Date de fin *", value=None, key=f"trav_df_{v}")
 
-    # -- Parkings --
-    st.markdown("##### 🅿️ Parkings impactés")
-    parking_options = dict(zip(df_parkings["NOM_PARC"], df_parkings["CODE_PARC"]))
-    selected_parkings = st.multiselect("Sélectionner les parkings", options=list(parking_options.keys()), key=f"trav_parkings_{v}")
+    # Journée partielle
+    is_journee_partielle = st.checkbox("📅 Journée partielle", key=f"trav_jp_{v}")
+    creneau = None
+    if is_journee_partielle:
+        creneau = st.selectbox("Créneau", options=["Matin", "Après-midi", "Nuit"], key=f"trav_creneau_{v}")
 
-    if len(selected_parkings) == 1:
-        parc_info = df_parkings[df_parkings["NOM_PARC"] == selected_parkings[0]].iloc[0]
+    # -- Parkings --
+    st.markdown("##### 🅿️ Parking impacté")
+    parking_options = dict(zip(df_parkings["NOM_PARC"], df_parkings["CODE_PARC"]))
+    selected_parking = st.selectbox("Sélectionner le parking *", options=[""] + list(parking_options.keys()), index=0, key=f"trav_parkings_{v}")
+
+    if selected_parking:
+        parc_info = df_parkings[df_parkings["NOM_PARC"] == selected_parking].iloc[0]
         if pd.notna(parc_info.get("CAPACITE")):
-            st.info(f"📊 Capacité du parking **{selected_parkings[0]}** : **{int(parc_info['CAPACITE'])} places** | Pistes entrée : {int(parc_info.get('NB_PISTES_ENTREE', 0))} | Pistes sortie : {int(parc_info.get('NB_PISTES_SORTIE', 0))}")
+            st.info(f"📊 Capacité : **{int(parc_info['CAPACITE'])} places** | Pistes entrée : {int(parc_info.get('NB_PISTES_ENTREE', 0))} | Pistes sortie : {int(parc_info.get('NB_PISTES_SORTIE', 0))}")
 
     # -- Places impactées --
     st.markdown("##### Impact sur les places")
@@ -415,12 +426,17 @@ with tab_create:
     is_pistes_impactees = st.checkbox("🚧 Piste(s) impactée(s)", key=f"trav_pistes_cb_{v}")
     nb_pistes_entree = None
     nb_pistes_sortie = None
+    fermeture_globale_pistes = False
     if is_pistes_impactees:
-        col1, col2 = st.columns(2)
-        with col1:
-            nb_pistes_entree = st.number_input("Nb pistes ENTRÉE fermées", min_value=0, value=0, key=f"trav_pe_{v}")
-        with col2:
-            nb_pistes_sortie = st.number_input("Nb pistes SORTIE fermées", min_value=0, value=0, key=f"trav_ps_{v}")
+        fermeture_globale_pistes = st.checkbox("🚫 Fermeture globale des pistes (toutes entrées/sorties fermées)", key=f"trav_ferm_pistes_{v}")
+        if not fermeture_globale_pistes:
+            col1, col2 = st.columns(2)
+            with col1:
+                nb_pistes_entree = st.number_input("Nb pistes ENTRÉE fermées", min_value=0, value=0, key=f"trav_pe_{v}")
+            with col2:
+                nb_pistes_sortie = st.number_input("Nb pistes SORTIE fermées", min_value=0, value=0, key=f"trav_ps_{v}")
+        else:
+            st.info("🚫 Toutes les pistes (entrées et sorties) sont fermées.")
 
     # -- PHASAGE --
     st.markdown("---")
@@ -446,10 +462,11 @@ with tab_create:
 
         # Bouton pour ajouter une phase
         if st.button("➕ Ajouter une phase", key=f"trav_add_phase_{v}"):
+            num = len(st.session_state["phases_list"]) + 1
             st.session_state["phases_list"].append({
-                "numero": len(st.session_state["phases_list"]) + 1,
-                "date_debut": None,
-                "date_fin": None,
+                "numero": num,
+                "date_debut": date_debut if num == 1 else None,
+                "date_fin": date_fin,
                 "nb_places": 0,
                 "commentaire": ""
             })
@@ -491,7 +508,7 @@ with tab_create:
                         st.session_state["phases_list"][i]["nb_places"] = 0
 
                 p_comm = st.text_input(
-                    f"Secteur impacté phase {phase['numero']}",
+                    f"Secteur impacté phase {phase['numero']} *",
                     value=phase.get("commentaire", ""),
                     placeholder="Ex: Niveau -2 zone A, Rampe d'accès nord...",
                     key=f"phase_comm_{i}"
@@ -534,11 +551,15 @@ with tab_create:
             st.error("Le contact interne est obligatoire.")
         elif type_travaux == "EXTERNE" and not contact_externe.strip():
             st.error("Le contact externe est obligatoire pour les travaux externes.")
-        elif not selected_parkings:
-            st.error("Sélectionnez au moins un parking impacté.")
+        elif not selected_parking:
+            st.error("Sélectionnez un parking impacté.")
+        elif is_travaux_phases and "phases_list" in st.session_state and any(
+            not phase.get("commentaire", "").strip() for phase in st.session_state["phases_list"]
+        ):
+            st.error("Le secteur impacté est obligatoire pour chaque phase.")
         else:
             # Déterminer le code type
-            if type_travaux == "INTERNE":
+            if type_travaux == "METPARK":
                 type_row = df_types_trav[df_types_trav["LIBELLE_TYPE_EVENEMENT"].str.contains("interne", case=False)]
             else:
                 type_row = df_types_trav[df_types_trav["LIBELLE_TYPE_EVENEMENT"].str.contains("externe", case=False)]
@@ -559,14 +580,15 @@ with tab_create:
                 code_impact=code_impact,
                 timestamp_debut=timestamp_debut,
                 timestamp_fin_sql=timestamp_fin_sql,
-                is_journee_partielle=False,
-                creneau=None,
+                is_journee_partielle=is_journee_partielle,
+                creneau=creneau,
                 is_places_impactees=is_places_impactees,
                 nb_places_impactees=nb_places_impactees if is_places_impactees and not fermeture_totale else None,
                 fermeture_totale=fermeture_totale,
                 is_pistes_impactees=is_pistes_impactees,
-                nb_pistes_entree=nb_pistes_entree if is_pistes_impactees else None,
-                nb_pistes_sortie=nb_pistes_sortie if is_pistes_impactees else None,
+                nb_pistes_entree=nb_pistes_entree if is_pistes_impactees and not fermeture_globale_pistes else None,
+                nb_pistes_sortie=nb_pistes_sortie if is_pistes_impactees and not fermeture_globale_pistes else None,
+                fermeture_globale_pistes=fermeture_globale_pistes,
                 type_travaux=type_travaux,
                 contact_interne=contact_interne,
                 contact_externe=contact_externe if type_travaux == "EXTERNE" else None,
@@ -577,9 +599,8 @@ with tab_create:
 
             new_code = get_max_code_evenement()
 
-            # Parkings
-            for parc_name in selected_parkings:
-                insert_parc_evenement(new_code, parking_options[parc_name], parc_name)
+            # Parking
+            insert_parc_evenement(new_code, parking_options[selected_parking], selected_parking)
 
             # Phases
             if is_travaux_phases and "phases_list" in st.session_state:
@@ -651,10 +672,14 @@ with tab_edit:
                 col1, col2 = st.columns(2)
                 with col1:
                     new_date_debut = st.date_input("Date de début", value=None, key=f"trav_e_dd_{code_edit}")
-                    new_contact_interne = st.text_input("Contact interne", placeholder="Laisser vide pour conserver", key=f"trav_edit_ci_{code_edit}")
+                    df_contacts_edit = get_contacts_internes()
+                    contact_opts_edit = {f"{row['NOM']} — {row['EMAIL']}": f"{row['NOM']} ({row['EMAIL']})" for _, row in df_contacts_edit.iterrows()} if not df_contacts_edit.empty else {}
+                    new_selected_contact = st.selectbox("Contact interne Metpark",
+                        options=["(conserver)"] + list(contact_opts_edit.keys()), index=0, key=f"trav_edit_ci_{code_edit}")
+                    new_contact_interne = contact_opts_edit[new_selected_contact] if new_selected_contact != "(conserver)" else ""
                 with col2:
                     new_date_fin = st.date_input("Date de fin", value=None, key=f"trav_e_df_{code_edit}")
-                    new_contact_externe = st.text_input("Contact externe", placeholder="Laisser vide pour conserver", key=f"trav_edit_ce_{code_edit}")
+                    new_contact_externe = st.text_input("Nom de la société (externe)", placeholder="Laisser vide pour conserver", key=f"trav_edit_ce_{code_edit}")
 
                 new_fermeture = st.checkbox(
                     "🚫 Fermeture totale",
