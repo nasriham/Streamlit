@@ -1,5 +1,25 @@
+# Utility functions for parking management application
+# Co-authored with CoCo
 import math
 import pandas as pd
+import streamlit as st
+
+
+def show_notification():
+    """Display pending notification if any (green success, orange warning, red error)."""
+    if "notification" in st.session_state:
+        notif = st.session_state.pop("notification")
+        if notif["type"] == "success":
+            st.success(notif["message"])
+        elif notif["type"] == "error":
+            st.error(notif["message"])
+        elif notif["type"] == "warning":
+            st.warning(notif["message"])
+
+
+def notify(message: str, notif_type: str = "success"):
+    """Set a notification to be displayed after rerun."""
+    st.session_state["notification"] = {"type": notif_type, "message": message}
 
 def clean_value(x, dtype="str"):
     # NULL universel
