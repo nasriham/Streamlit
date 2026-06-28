@@ -9,8 +9,6 @@ entities:
       name: GESTION_EVENEMENTS
     title: gestion-evenements
     query_warehouse: WH_HORS_PRODUCTION
-    compute_pool: SYSTEM_COMPUTE_POOL_CPU
-    run_mode: SpcsOnly
     execute_as: OWNER
     main_file: streamlit_app.py
     artifacts:
@@ -23,6 +21,7 @@ entities:
       - pages/accueil.py
       - pages/evenements_externes.py
       - pages/evenements_techniques.py
-      - pages/occupation_parking.py
       - pages/travaux.py
-      - assets/logo_metpark.svg
+      - assets/MTPK_logo.png
+    compute_pool: SYSTEM_COMPUTE_POOL_CPU
+    run_mode: SpcsOnly
