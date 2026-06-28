@@ -1,3 +1,5 @@
+# Requêtes SQL centralisées pour la gestion des événements parking
+# Co-authored with CoCo
 """Toutes les requêtes SQL centralisées."""
 
 from core.db import run_query, run_dml, SCHEMA
@@ -97,15 +99,13 @@ def get_contacts_internes():
 def get_parkings():
     return run_query(f"""
         SELECT
-            p.CODE_PARC,
-            p.NOM_PARC,
-            e.NB_CAPACITE_EXPLOITEE AS CAPACITE,
-            e.NB_VOIES_ACCES AS NB_PISTES_ENTREE,
-            e.NB_VOIES_SORTIES AS NB_PISTES_SORTIE
-        FROM {SCHEMA}.T_R_PARC p
-        LEFT JOIN {SCHEMA}.T_R_PARC_EXPLOITATION e ON p.CODE_PARC = e.CODE_PARC AND e.IS_ACTIVE = TRUE
-        WHERE p.IS_ACTIVE = TRUE
-        ORDER BY p.NOM_PARC
+            CODE_PARC,
+            NOM_PARC,
+            NB_CAPACITE_EXPLOITEE AS CAPACITE,
+            NB_PISTES_ENTREE,
+            NB_PISTES_SORTIE
+        FROM {SCHEMA}.V_PARC_CAPACITE_DYNAMIQUE
+        ORDER BY NOM_PARC
     """, ttl=0)
 
 
@@ -362,213 +362,4 @@ def close_all_snapshots(code_evt: int):
     """)
 
 
-# ===== OCCUPATION / IMPACT PAR PARKING =====
 
-def get_evenements_par_parking():
-    """Get events grouped by impacted parking with places info."""
-    return run_query(f"""
-        SELECT
-            ep.NOM_PARC AS PARKING,
-            ep.CODE_PARC,
-            px.NB_CAPACITE_EXPLOITEE AS CAPACITE,
-            e.CODE_EVENEMENT,
-            e.TITRE_EVENEMENT,
-            t.LIBELLE_TYPE_EVENEMENT AS TYPE_EVENEMENT,
-            t.CATEGORIE,
-            i.LIBELLE_IMPACT AS IMPACT,
-            i.NIVEAU_SEVERITE,
-            e.DATE_DEBUT,
-            e.DATE_FIN,
-            CASE 
-                WHEN e.IS_TRAVAUX_PHASES = TRUE THEN 
-                    (SELECT COALESCE(SUM(ph.NB_PLACES_IMPACTEES), 0) FROM {SCHEMA}.T_F_PHASE_TRAVAUX ph WHERE ph.CODE_EVENEMENT = e.CODE_EVENEMENT)
-                ELSE COALESCE(e.NB_PLACES_IMPACTEES, 0)
-            END AS NB_PLACES_IMPACTEES,
-            e.FERMETURE_TOTALE,
-            e.IS_ACTIVE
-        FROM {SCHEMA}.T_F_EVENEMENT_PARC ep
-        JOIN {SCHEMA}.T_F_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_R_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
-        LEFT JOIN {SCHEMA}.T_R_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_R_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
-        WHERE e.IS_ACTIVE = TRUE
-        ORDER BY ep.NOM_PARC, e.DATE_DEBUT DESC
-    """)
-
-
-def get_stats_par_parking():
-    """Get event count, max severity, and places impact per parking."""
-    return run_query(f"""
-        SELECT
-            ep.NOM_PARC AS PARKING,
-            px.NB_CAPACITE_EXPLOITEE AS CAPACITE,
-            COUNT(DISTINCT ep.CODE_EVENEMENT) AS NB_EVENEMENTS,
-            MAX(i.NIVEAU_SEVERITE) AS SEVERITE_MAX,
-            SUM(
-                CASE 
-                    WHEN e.FERMETURE_TOTALE = TRUE THEN COALESCE(px.NB_CAPACITE_EXPLOITEE, 0)
-                    WHEN e.IS_TRAVAUX_PHASES = TRUE THEN 
-                        COALESCE((SELECT SUM(ph.NB_PLACES_IMPACTEES) FROM {SCHEMA}.T_F_PHASE_TRAVAUX ph WHERE ph.CODE_EVENEMENT = e.CODE_EVENEMENT), 0)
-                    ELSE COALESCE(e.NB_PLACES_IMPACTEES, 0) 
-                END
-            ) AS TOTAL_PLACES_IMPACTEES,
-            MAX(CASE WHEN e.FERMETURE_TOTALE = TRUE THEN 1 ELSE 0 END)::BOOLEAN AS FERMETURE_TOTALE,
-            MIN(e.DATE_DEBUT) AS PREMIER_EVENEMENT,
-            MAX(e.DATE_DEBUT) AS DERNIER_EVENEMENT
-        FROM {SCHEMA}.T_F_EVENEMENT_PARC ep
-        JOIN {SCHEMA}.T_F_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_R_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
-        LEFT JOIN {SCHEMA}.T_R_IMPACT_EVENEMENT i ON e.CODE_IMPACT = i.CODE_IMPACT
-        WHERE e.IS_ACTIVE = TRUE
-        GROUP BY ep.NOM_PARC, px.NB_CAPACITE_EXPLOITEE
-        ORDER BY NB_EVENEMENTS DESC
-    """)
-
-
-# ===== TABLE DE FAIT DISPONIBILITE =====
-
-def recalculer_disponibilite():
-    """Recalcule la table de fait T_F_DISPONIBILITE_PARC.
-    Supprime et réinsère toutes les lignes basées sur les événements actifs.
-    Pour les travaux phasés, utilise les phases individuelles (dates + places spécifiques).
-    """
-    run_dml(f"DELETE FROM {SCHEMA}.T_F_DISPONIBILITE_PARC")
-
-    # 1. Événements NON phasés (ou non-travaux)
-    run_dml(f"""
-        INSERT INTO {SCHEMA}.T_F_DISPONIBILITE_PARC
-        (CODE_PARC, NOM_PARC, CODE_EVENEMENT, TITRE_EVENEMENT, TYPE_EVENEMENT,
-         DATE_DEBUT, DATE_FIN, CAPACITE_EXPLOITEE, NB_PLACES_IMPACTEES,
-         FERMETURE_TOTALE, PLACES_DISPONIBLES, TAUX_IMPACT, IS_EN_COURS, DATE_CALCUL)
-        SELECT
-            ep.CODE_PARC,
-            ep.NOM_PARC,
-            e.CODE_EVENEMENT,
-            e.TITRE_EVENEMENT,
-            t.LIBELLE_TYPE_EVENEMENT,
-            e.DATE_DEBUT,
-            e.DATE_FIN,
-            px.NB_CAPACITE_EXPLOITEE,
-            CASE WHEN e.FERMETURE_TOTALE = TRUE THEN px.NB_CAPACITE_EXPLOITEE
-                 ELSE COALESCE(e.NB_PLACES_IMPACTEES, 0)
-            END AS NB_PLACES_IMPACTEES,
-            e.FERMETURE_TOTALE,
-            GREATEST(0, COALESCE(px.NB_CAPACITE_EXPLOITEE, 0) -
-                CASE WHEN e.FERMETURE_TOTALE = TRUE THEN COALESCE(px.NB_CAPACITE_EXPLOITEE, 0)
-                     ELSE COALESCE(e.NB_PLACES_IMPACTEES, 0)
-                END
-            ) AS PLACES_DISPONIBLES,
-            CASE WHEN COALESCE(px.NB_CAPACITE_EXPLOITEE, 0) > 0
-                THEN ROUND(
-                    (CASE WHEN e.FERMETURE_TOTALE = TRUE THEN px.NB_CAPACITE_EXPLOITEE
-                          ELSE COALESCE(e.NB_PLACES_IMPACTEES, 0)
-                     END) * 100.0 / px.NB_CAPACITE_EXPLOITEE, 1)
-                ELSE 0
-            END AS TAUX_IMPACT,
-            CASE WHEN e.DATE_DEBUT <= CURRENT_TIMESTAMP() AND (e.DATE_FIN IS NULL OR e.DATE_FIN >= CURRENT_TIMESTAMP())
-                THEN TRUE ELSE FALSE
-            END AS IS_EN_COURS,
-            CURRENT_TIMESTAMP()
-        FROM {SCHEMA}.T_F_EVENEMENT_PARC ep
-        JOIN {SCHEMA}.T_F_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_R_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
-        LEFT JOIN {SCHEMA}.T_R_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
-        WHERE e.IS_ACTIVE = TRUE
-          AND (e.IS_TRAVAUX_PHASES = FALSE OR e.IS_TRAVAUX_PHASES IS NULL)
-    """)
-
-    # 2. Travaux PHASÉS : une ligne par phase avec ses dates et places propres
-    run_dml(f"""
-        INSERT INTO {SCHEMA}.T_F_DISPONIBILITE_PARC
-        (CODE_PARC, NOM_PARC, CODE_EVENEMENT, TITRE_EVENEMENT, TYPE_EVENEMENT,
-         DATE_DEBUT, DATE_FIN, CAPACITE_EXPLOITEE, NB_PLACES_IMPACTEES,
-         FERMETURE_TOTALE, PLACES_DISPONIBLES, TAUX_IMPACT, IS_EN_COURS, DATE_CALCUL)
-        SELECT
-            ep.CODE_PARC,
-            ep.NOM_PARC,
-            e.CODE_EVENEMENT,
-            e.TITRE_EVENEMENT || ' — Phase ' || ph.NUMERO_PHASE,
-            t.LIBELLE_TYPE_EVENEMENT,
-            ph.DATE_DEBUT,
-            ph.DATE_FIN,
-            px.NB_CAPACITE_EXPLOITEE,
-            CASE WHEN e.FERMETURE_TOTALE = TRUE THEN COALESCE(px.NB_CAPACITE_EXPLOITEE, 0)
-                 ELSE COALESCE(ph.NB_PLACES_IMPACTEES, 0)
-            END,
-            e.FERMETURE_TOTALE,
-            CASE WHEN e.FERMETURE_TOTALE = TRUE THEN 0
-                 ELSE GREATEST(0, COALESCE(px.NB_CAPACITE_EXPLOITEE, 0) - COALESCE(ph.NB_PLACES_IMPACTEES, 0))
-            END,
-            CASE WHEN COALESCE(px.NB_CAPACITE_EXPLOITEE, 0) > 0
-                THEN CASE WHEN e.FERMETURE_TOTALE = TRUE THEN 100.0
-                     ELSE ROUND(COALESCE(ph.NB_PLACES_IMPACTEES, 0) * 100.0 / px.NB_CAPACITE_EXPLOITEE, 1)
-                END
-                ELSE 0
-            END AS TAUX_IMPACT,
-            CASE WHEN ph.DATE_DEBUT <= CURRENT_TIMESTAMP() AND ph.DATE_FIN >= CURRENT_TIMESTAMP()
-                THEN TRUE ELSE FALSE
-            END AS IS_EN_COURS,
-            CURRENT_TIMESTAMP()
-        FROM {SCHEMA}.T_F_EVENEMENT_PARC ep
-        JOIN {SCHEMA}.T_F_EVENEMENT e ON ep.CODE_EVENEMENT = e.CODE_EVENEMENT
-        JOIN {SCHEMA}.T_F_PHASE_TRAVAUX ph ON e.CODE_EVENEMENT = ph.CODE_EVENEMENT
-        LEFT JOIN {SCHEMA}.T_R_PARC_EXPLOITATION px ON ep.CODE_PARC = px.CODE_PARC AND px.IS_ACTIVE = TRUE
-        LEFT JOIN {SCHEMA}.T_R_TYPE_EVENEMENT t ON e.CODE_TYPE_EVENEMENT = t.CODE_TYPE_EVENEMENT
-        WHERE e.IS_ACTIVE = TRUE
-          AND e.IS_TRAVAUX_PHASES = TRUE
-    """)
-
-
-def get_disponibilite_parkings():
-    """Retourne la disponibilité agrégée par parking (événements en cours uniquement)."""
-    return run_query(f"""
-        SELECT
-            CODE_PARC,
-            NOM_PARC,
-            CAPACITE_EXPLOITEE,
-            SUM(NB_PLACES_IMPACTEES) AS TOTAL_PLACES_IMPACTEES,
-            GREATEST(0, COALESCE(CAPACITE_EXPLOITEE, 0) - SUM(NB_PLACES_IMPACTEES)) AS PLACES_DISPONIBLES,
-            CASE WHEN COALESCE(CAPACITE_EXPLOITEE, 0) > 0
-                THEN ROUND(SUM(NB_PLACES_IMPACTEES) * 100.0 / CAPACITE_EXPLOITEE, 1)
-                ELSE 0
-            END AS TAUX_IMPACT,
-            COUNT(*) AS NB_EVENEMENTS_EN_COURS,
-            MAX(FERMETURE_TOTALE::INT)::BOOLEAN AS FERMETURE_TOTALE
-        FROM {SCHEMA}.T_F_DISPONIBILITE_PARC
-        WHERE IS_EN_COURS = TRUE
-        GROUP BY CODE_PARC, NOM_PARC, CAPACITE_EXPLOITEE
-        ORDER BY TAUX_IMPACT DESC
-    """)
-
-
-def get_fait_disponibilite():
-    """Retourne le détail de la table de fait, ordonné par parking puis par date."""
-    return run_query(f"""
-        SELECT *
-        FROM {SCHEMA}.T_F_DISPONIBILITE_PARC
-        ORDER BY NOM_PARC, DATE_DEBUT, TITRE_EVENEMENT
-    """)
-
-
-def get_disponibilite_par_phase():
-    """Retourne la disponibilité détaillée pour les travaux phasés (inclut le nom de phase)."""
-    return run_query(f"""
-        SELECT
-            f.NOM_PARC,
-            f.CODE_PARC,
-            f.CODE_EVENEMENT,
-            f.TITRE_EVENEMENT,
-            f.TYPE_EVENEMENT,
-            f.DATE_DEBUT,
-            f.DATE_FIN,
-            f.CAPACITE_EXPLOITEE,
-            f.NB_PLACES_IMPACTEES,
-            f.FERMETURE_TOTALE,
-            f.PLACES_DISPONIBLES,
-            f.TAUX_IMPACT,
-            f.IS_EN_COURS,
-            f.DATE_CALCUL
-        FROM {SCHEMA}.T_F_DISPONIBILITE_PARC f
-        WHERE f.TITRE_EVENEMENT LIKE '%Phase%'
-        ORDER BY f.NOM_PARC, f.DATE_DEBUT
-    """)
