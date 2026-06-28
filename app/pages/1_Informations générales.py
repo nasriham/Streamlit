@@ -1,400 +1,295 @@
+# Page Informations generales sans gestion, peageur, niveaux
+# Co-authored with CoCo
 import streamlit as st
 from core.queries import (
-    get_parks,
-    get_villes,
-    get_secteurs,
-    get_districts,
-    get_type,
-    get_gestion,
-    get_peageur,
-    get_flag,
-    insert_park,
-    update_park,
-    delete_park,
-    get_history
+    get_parks, get_villes, get_secteurs, get_districts, get_type,
+    get_flag, insert_park, update_park, delete_park, get_history,
+    park_code_exists
 )
 from core.functions import (
-    clean_value
+    show_notification, notify
 )
-from datetime import datetime
-import pytz
 import pandas as pd
 
 user = st.user.user_name
 
-if "message" in st.session_state:
-    if st.session_state["message_type"] == "success":
-        st.success(st.session_state["message"])
-    elif st.session_state["message_type"] == "warning":
-        st.warning(st.session_state["message"])
+show_notification()
 
-    del st.session_state["message"]
-    del st.session_state["message_type"]
+st.title("📋 Informations générales")
+st.caption(f"Gestion du référentiel des parcs — Connecté : **{user}**")
+st.divider()
 
-
-# Header
-col1, col2 = st.columns([1, 5])
-with col1:
-    st.image("assets/logo.png", width=120)
-with col2:
-    st.title("Gestion des parcs - Informations générales")
-
-st.set_page_config(
-    page_title="Exploitation des parcs",
-    layout="wide"
-)
-    
-# =========================
-# 📦 LOAD DATA
-# =========================
 df_parks = get_parks()
 df_villes = get_villes()
 df_secteurs = get_secteurs()
 df_districts = get_districts()
 df_type = get_type()
-df_gestion = get_gestion()
-df_peageur = get_peageur()
 df_flag_fourriere = get_flag()
 df_flag_metstation = get_flag()
-df_flag_casier_irv = get_flag()
 
-# =========================
-# 🔁 DICTIONNAIRES (code -> libellé)
-# =========================
 ville_dict = dict(zip(df_villes["CODE_VILLE"], df_villes["LIBELLE_VILLE"]))
 secteur_dict = dict(zip(df_secteurs["CODE_SECTEUR"], df_secteurs["LIBELLE_SECTEUR"]))
 district_dict = dict(zip(df_districts["CODE_DISTRICT"], df_districts["LIBELLE_DISTRICT"]))
 type_dict = dict(zip(df_type["CODE_TYPE_PARC"], df_type["LIBELLE_TYPE_PARC"]))
-gestion_dict = dict(zip(df_gestion["CODE_GESTION"], df_gestion["LIBELLE_GESTION"]))
-peageur_dict = dict(zip(df_peageur["CODE_PEAGEUR"], df_peageur["LIBELLE_PEAGEUR"]))
 fourriere_dict = dict(zip(df_flag_fourriere["CODE_FLAG"], df_flag_fourriere["LIBELLE_FLAG"]))
 metstation_dict = dict(zip(df_flag_metstation["CODE_FLAG"], df_flag_metstation["LIBELLE_FLAG"]))
-casier_irv_dict = dict(zip(df_flag_casier_irv["CODE_FLAG"], df_flag_casier_irv["LIBELLE_FLAG"]))
 
-# =========================
-# 🏷 LABELS (code - libellé)
-# =========================
-ville_labels = {code: f"{lib}" for code, lib in ville_dict.items()}
-secteur_labels = {code: f"{lib}" for code, lib in secteur_dict.items()}
-district_labels = {code: f"{lib}" for code, lib in district_dict.items()}
-type_labels = {code: f"{lib}" for code, lib in type_dict.items()}
-gestion_labels = {code: f"{lib}" for code, lib in gestion_dict.items()}
-peageur_labels = {code: f"{lib}" for code, lib in peageur_dict.items()}
-fourriere_labels = {code: f"{lib}" for code, lib in fourriere_dict.items()}
-metstation_labels = {code: f"{lib}" for code, lib in metstation_dict.items()}
-casier_irv_labels = {code: f"{lib}" for code, lib in casier_irv_dict.items()}
+ville_labels = {code: lib for code, lib in ville_dict.items()}
+secteur_labels = {code: lib for code, lib in secteur_dict.items()}
+district_labels = {code: lib for code, lib in district_dict.items()}
+type_labels = {code: lib for code, lib in type_dict.items()}
+fourriere_labels = {code: lib for code, lib in fourriere_dict.items()}
+metstation_labels = {code: lib for code, lib in metstation_dict.items()}
 
-# =========================
-# 👀 TABLE AFFICHAGE
-# =========================
 df_view = df_parks.copy()
+if not df_view.empty:
+    df_view["VILLE"] = df_view["CODE_VILLE"].map(ville_labels)
+    df_view["SECTEUR"] = df_view["CODE_SECTEUR"].map(secteur_labels)
+    df_view["DISTRICT"] = df_view["CODE_DISTRICT"].map(district_labels)
+    df_view["TYPE"] = df_view["CODE_TYPE_PARC"].map(type_labels)
+    df_view["FOURRIERE"] = df_view["CODE_FLAG_FOURRIERE"].map(fourriere_labels)
+    df_view["METSTATION"] = df_view["CODE_FLAG_METSTATION"].map(metstation_labels)
 
-df_view["VILLE"] = df_view["CODE_VILLE"].map(ville_labels)
-df_view["SECTEUR"] = df_view["CODE_SECTEUR"].map(secteur_labels)
-df_view["DISTRICT"] = df_view["CODE_DISTRICT"].map(district_labels)
-df_view["TYPE"] = df_view["CODE_TYPE_PARC"].map(type_labels)
-df_view["GESTION"] = df_view["CODE_GESTION"].map(gestion_labels)
-df_view["PEAGEUR"] = df_view["CODE_PEAGEUR"].map(peageur_labels)
-df_view["FOURRIERE"] = df_view["CODE_FLAG_FOURRIERE"].map(fourriere_labels)
-df_view["METSTATION"] = df_view["CODE_FLAG_METSTATION"].map(metstation_labels)
-df_view["CASIER IRV"] = df_view["CODE_FLAG_CASIER_IRV"].map(casier_irv_labels)
+DISPLAY_COLS = ["CODE_PARC", "NOM_PARC", "ADRESSE_PARC", "VILLE", "SECTEUR", "DISTRICT", "TYPE", "FOURRIERE", "METSTATION"]
 
-st.subheader("📊 Liste des parcs")
+tab_search, tab_create, tab_edit, tab_delete, tab_history = st.tabs([
+    "🔍 Rechercher", "➕ Créer", "✏️ Modifier", "🗑️ Supprimer", "📜 Historique"
+])
 
-event = st.dataframe(
-    df_view[["CODE_PARC", "NOM_PARC", "ADRESSE_PARC", "VILLE", "SECTEUR", "DISTRICT", "TYPE", "GESTION", "PEAGEUR", "NOMBRE_NIVEAU", "FOURRIERE", "METSTATION", "CASIER IRV", "SURFACE"]],
-    use_container_width=True,
-    selection_mode="single-row",
-    on_select="rerun"
-)
+with tab_search:
+    st.subheader("Rechercher un parc")
+    search_term = st.text_input("🔍 Recherche", placeholder="Tapez votre recherche...", key="search_info")
+    if df_view.empty:
+        st.info("Aucun parc actif.")
+    else:
+        if search_term:
+            term = search_term.lower()
+            mask = pd.Series([False] * len(df_view))
+            for col in DISPLAY_COLS:
+                if col in df_view.columns:
+                    mask = mask | df_view[col].astype(str).str.lower().str.contains(term, na=False)
+            df_results = df_view[mask]
+        else:
+            df_results = df_view
+        st.caption(f"{len(df_results)} parc(s)")
+        st.dataframe(df_results[DISPLAY_COLS], use_container_width=True, hide_index=True,
+            column_config={
+                "CODE_PARC": st.column_config.TextColumn("Code Parc", width="small"),
+                "NOM_PARC": st.column_config.TextColumn("Nom Parc", width="medium"),
+                "ADRESSE_PARC": st.column_config.TextColumn("Adresse"),
+                "VILLE": st.column_config.TextColumn("Ville"),
+                "SECTEUR": st.column_config.TextColumn("Secteur"),
+                "DISTRICT": st.column_config.TextColumn("District"),
+                "TYPE": st.column_config.TextColumn("Type d'ouvrage"),
+                "FOURRIERE": st.column_config.TextColumn("Fourrière"),
+                "METSTATION": st.column_config.TextColumn("Metstation"),
+            })
 
-# =========================
-# 🎯 SELECTION LIGNE
-# =========================
-if event.selection.rows:
-    selected_row = df_parks.iloc[event.selection.rows[0]]
-
-    st.subheader("✏️ Modifier un parc")
-
-    if st.button("📜 Voir historique"):
-        st.session_state["history_code_parc"] = selected_row["CODE_PARC"]
-        
-    # =========================
-    # 🧾 FORMULAIRE EDIT (2 COLONNES)
-    # =========================
-    
+with tab_create:
+    st.subheader("Nouveau parc")
     col1, col2 = st.columns(2)
-    
     with col1:
-        nom = st.text_input("Nom parc", value=selected_row["NOM_PARC"])
-        adresse = st.text_input("Adresse", value=selected_row["ADRESSE_PARC"])
-
-        ville_options = {v: k for k, v in ville_labels.items()} 
-        default_ville = ville_labels[selected_row["CODE_VILLE"]]
-        
-        ville = st.selectbox(
-            "Ville",
-            list(ville_options.keys()),
-            index=list(ville_options.keys()).index(default_ville)
-        )
+        code_parc = st.text_input("Code parc *", key="c_code")
+        nom = st.text_input("Nom parc *", key="c_nom")
+        adresse = st.text_input("Adresse", key="c_adresse")
+        ville_options = {v: k for k, v in ville_labels.items()}
+        ville = st.selectbox("Ville", list(ville_options.keys()), key="c_ville")
         code_ville = ville_options[ville]
-
         secteur_options = {v: k for k, v in secteur_labels.items()}
-        default_secteur = secteur_labels[selected_row["CODE_SECTEUR"]]
-    
-        secteur = st.selectbox(
-            "Secteur",
-            list(secteur_options.keys()),
-            index=list(secteur_options.keys()).index(default_secteur)
-        )
+        secteur = st.selectbox("Secteur", list(secteur_options.keys()), key="c_secteur")
         code_secteur = secteur_options[secteur]
-
-        district_options = {v: k for k, v in district_labels.items()}
-        default_district = district_labels[selected_row["CODE_DISTRICT"]]
-        
-        district = st.selectbox(
-            "District",
-            list(district_options.keys()),
-            index=list(district_options.keys()).index(default_district)
-        )
-        code_district = district_options[district]
-
-        type_options = {v: k for k, v in type_labels.items()} 
-        default_type = type_labels[selected_row["CODE_TYPE_PARC"]]
-        
-        type = st.selectbox(
-            "Type de parc",
-            list(type_options.keys()),
-            index=list(type_options.keys()).index(default_type)
-        )
-        code_type = type_options[type]
-    
-    
     with col2:
-        
-        gestion_options = {v: k for k, v in gestion_labels.items()} 
-        default_gestion = gestion_labels[selected_row["CODE_GESTION"]]
-        
-        gestion = st.selectbox(
-            "Gestion",
-            list(gestion_options.keys()),
-            index=list(gestion_options.keys()).index(default_gestion)
-        )
-        code_gestion = gestion_options[gestion]
-
-        peageur_options = {v: k for k, v in peageur_labels.items()} 
-        default_peageur = peageur_labels[selected_row["CODE_PEAGEUR"]]
-        
-        peageur = st.selectbox(
-            "Péageur",
-            list(peageur_options.keys()),
-            index=list(peageur_options.keys()).index(default_peageur)
-        )
-        code_peageur = peageur_options[peageur]
-    
-        nombre_niveau = st.number_input(
-            "Nombre de niveau",
-            value=selected_row["NOMBRE_NIVEAU"]
-        )
-
-        fourriere_options = {v: k for k, v in fourriere_labels.items()} 
-        default_fourriere = fourriere_labels[selected_row["CODE_FLAG_FOURRIERE"]]
-        
-        fourriere = st.selectbox(
-            "Fourrière",
-            list(fourriere_options.keys()),
-            index=list(fourriere_options.keys()).index(default_fourriere)
-        )
+        district_options = {v: k for k, v in district_labels.items()}
+        district = st.selectbox("District", list(district_options.keys()), key="c_district")
+        code_district = district_options[district]
+        type_options = {v: k for k, v in type_labels.items()}
+        type_parc = st.selectbox("Type d'ouvrage", list(type_options.keys()), key="c_type")
+        code_type = type_options[type_parc]
+        fourriere_options = {v: k for k, v in fourriere_labels.items()}
+        fourriere = st.selectbox("Fourrière", list(fourriere_options.keys()), key="c_fourriere")
         code_fourriere = fourriere_options[fourriere]
-
-        metstation_options = {v: k for k, v in metstation_labels.items()} 
-        default_metstation = metstation_labels[selected_row["CODE_FLAG_METSTATION"]]
-        
-        metstation = st.selectbox(
-            "Metstation",
-            list(metstation_options.keys()),
-            index=list(metstation_options.keys()).index(default_metstation)
-        )
+        metstation_options = {v: k for k, v in metstation_labels.items()}
+        metstation = st.selectbox("Metstation", list(metstation_options.keys()), key="c_metstation")
         code_metstation = metstation_options[metstation]
+    st.divider()
+    if st.button("Créer le parc", type="primary", key="btn_create"):
+        if not code_parc or not nom:
+            st.error("Le code parc et le nom sont obligatoires.")
+        elif park_code_exists(code_parc.strip().upper()):
+            st.error(f"Le code parc **{code_parc}** existe déjà. Veuillez utiliser un code unique.")
+        elif not df_parks.empty and nom.strip().upper() in df_parks["NOM_PARC"].str.upper().values:
+            st.error(f"Le nom de parc **{nom}** existe déjà. Veuillez utiliser un nom unique.")
+        else:
+            insert_park({
+                "CODE_PARC": code_parc.strip().upper(), "NOM_PARC": nom, "ADRESSE_PARC": adresse,
+                "CODE_VILLE": code_ville, "CODE_SECTEUR": code_secteur,
+                "CODE_DISTRICT": code_district, "CODE_TYPE_PARC": code_type,
+                "CODE_FLAG_FOURRIERE": code_fourriere, "CODE_FLAG_METSTATION": code_metstation,
+                "NOM_CREATEUR": user, "NOM_MODIFICATEUR": user
+            })
+            notify("✅ Parc créé avec succès", "success")
+            st.rerun()
 
-        casier_irv_options = {v: k for k, v in casier_irv_labels.items()} 
-        default_casier_irv = casier_irv_labels[selected_row["CODE_FLAG_CASIER_IRV"]]
-        
-        casier_irv = st.selectbox(
-            "Casier IRV",
-            list(casier_irv_options.keys()),
-            index=list(casier_irv_options.keys()).index(default_casier_irv)
-        )
-        code_casier_irv = casier_irv_options[casier_irv]
-    
-        surface = st.text_input(
-            "Surface",
-            value=clean_value(selected_row["SURFACE"],"number")
-        )
+with tab_edit:
+    st.subheader("Modifier un parc existant")
+    if df_parks.empty:
+        st.info("Aucun parc à modifier.")
+    else:
+        parc_list = df_parks["CODE_PARC"].tolist()
+        parc_names = df_parks.set_index("CODE_PARC")["NOM_PARC"].to_dict()
+        options = [parc_names.get(code, code) for code in parc_list]
 
-        surface=clean_value(surface,"number")
-        
-    # =========================
-    # 💾 UPDATE
-    # =========================
-    if st.button("💾 Mettre à jour"):
-        update_park({
-            "CODE_PARC": selected_row["CODE_PARC"],
-            "NOM_PARC": nom,
-            "ADRESSE_PARC": adresse,
-            "CODE_VILLE": code_ville,
-            "CODE_SECTEUR": code_secteur,
-            "CODE_DISTRICT": code_district,
-            "CODE_TYPE_PARC": code_type,
-            "CODE_GESTION": code_gestion,
-            "CODE_PEAGEUR": code_peageur,
-            "NOMBRE_NIVEAU": nombre_niveau,
-            "CODE_FLAG_FOURRIERE": code_fourriere,
-            "CODE_FLAG_METSTATION": code_metstation,
-            "CODE_FLAG_CASIER_IRV": code_casier_irv,
-            "SURFACE": surface,
-            "NOM_CREATEUR": user,
-            "NOM_MODIFICATEUR": user,
-            "DATE_MODIFICATION": datetime.now(pytz.timezone("Europe/Paris"))
-        })
+        selected_idx = st.selectbox("Sélectionner un parc", range(len(options)),
+                                     format_func=lambda i: options[i], key="edit_select")
+        selected_row = df_parks.iloc[selected_idx]
+        pk = selected_row["CODE_PARC"]
+        st.divider()
+        with st.form(key=f"form_edit_{pk}"):
+            col1, col2 = st.columns(2)
+            with col1:
+                nom = st.text_input("Nom parc", value=selected_row["NOM_PARC"] or "")
+                adresse = st.text_input("Adresse", value=selected_row["ADRESSE_PARC"] or "")
+                ville_options = {v: k for k, v in ville_labels.items()}
+                ville_keys = list(ville_options.keys())
+                default_ville = ville_labels.get(selected_row["CODE_VILLE"], "")
+                ville_idx = ville_keys.index(default_ville) if default_ville in ville_keys else 0
+                ville = st.selectbox("Ville", ville_keys, index=ville_idx)
+                code_ville = ville_options[ville]
+                secteur_options = {v: k for k, v in secteur_labels.items()}
+                secteur_keys = list(secteur_options.keys())
+                default_secteur = secteur_labels.get(selected_row["CODE_SECTEUR"], "")
+                secteur_idx = secteur_keys.index(default_secteur) if default_secteur in secteur_keys else 0
+                secteur = st.selectbox("Secteur", secteur_keys, index=secteur_idx)
+                code_secteur = secteur_options[secteur]
+            with col2:
+                district_options = {v: k for k, v in district_labels.items()}
+                district_keys = list(district_options.keys())
+                default_district = district_labels.get(selected_row["CODE_DISTRICT"], "")
+                district_idx = district_keys.index(default_district) if default_district in district_keys else 0
+                district = st.selectbox("District", district_keys, index=district_idx)
+                code_district = district_options[district]
+                type_options = {v: k for k, v in type_labels.items()}
+                type_keys = list(type_options.keys())
+                default_type = type_labels.get(selected_row["CODE_TYPE_PARC"], "")
+                type_idx = type_keys.index(default_type) if default_type in type_keys else 0
+                type_parc = st.selectbox("Type d'ouvrage", type_keys, index=type_idx)
+                code_type = type_options[type_parc]
+                fourriere_options = {v: k for k, v in fourriere_labels.items()}
+                fourriere_keys = list(fourriere_options.keys())
+                default_fourriere = fourriere_labels.get(selected_row["CODE_FLAG_FOURRIERE"], "")
+                fourriere_idx = fourriere_keys.index(default_fourriere) if default_fourriere in fourriere_keys else 0
+                fourriere = st.selectbox("Fourrière", fourriere_keys, index=fourriere_idx)
+                code_fourriere = fourriere_options[fourriere]
+                metstation_options = {v: k for k, v in metstation_labels.items()}
+                metstation_keys = list(metstation_options.keys())
+                default_metstation = metstation_labels.get(selected_row["CODE_FLAG_METSTATION"], "")
+                metstation_idx = metstation_keys.index(default_metstation) if default_metstation in metstation_keys else 0
+                metstation = st.selectbox("Metstation", metstation_keys, index=metstation_idx)
+                code_metstation = metstation_options[metstation]
+            submitted = st.form_submit_button("Mettre à jour", type="primary")
+        if submitted:
+            update_park({
+                "CODE_PARC": pk, "NOM_PARC": nom, "ADRESSE_PARC": adresse,
+                "CODE_VILLE": code_ville, "CODE_SECTEUR": code_secteur,
+                "CODE_DISTRICT": code_district, "CODE_TYPE_PARC": code_type,
+                "CODE_FLAG_FOURRIERE": code_fourriere, "CODE_FLAG_METSTATION": code_metstation,
+                "NOM_CREATEUR": user, "NOM_MODIFICATEUR": user
+            })
+            notify("✅ Parc mis à jour avec succès", "success")
+            st.rerun()
 
-        st.session_state["message"] = "Parc mis à jour ✅"
-        st.session_state["message_type"] = "success"
-        st.rerun()
+with tab_delete:
+    st.subheader("Supprimer un parc")
+    if df_parks.empty:
+        st.info("Aucun parc à supprimer.")
+    else:
+        parc_list = df_parks["CODE_PARC"].tolist()
+        parc_names = df_parks.set_index("CODE_PARC")["NOM_PARC"].to_dict()
+        options_del = [f"{code} — {parc_names.get(code, '')}" for code in parc_list]
+        selected_del_idx = st.selectbox("Sélectionner le parc à supprimer", range(len(options_del)),
+                                         format_func=lambda i: options_del[i], key="del_select")
+        code_to_delete = parc_list[selected_del_idx]
+        st.warning(f"⚠️ Vous allez supprimer le parc **{code_to_delete}** — **{parc_names.get(code_to_delete, '')}**")
+        st.divider()
 
+        @st.dialog("Confirmation de suppression")
+        def confirm_delete(code, nom):
+            st.markdown(
+                f"Vous vous apprêtez à supprimer le parc **{code}** — **{nom}**.\n\n"
+                "Cette action est irréversible. Confirmez-vous la suppression ?"
+            )
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Annuler", key="btn_cancel_delete", use_container_width=True):
+                    st.rerun()
+            with col2:
+                if st.button("Supprimer", type="primary", key="btn_confirm_delete", use_container_width=True):
+                    delete_park(code, user)
+                    notify("🗑️ Parc supprimé", "warning")
+                    st.rerun()
 
-# =========================
-# 🗑 HISTORIQUE
-# =========================
-if "history_code_parc" in st.session_state:
+        if st.button("Supprimer ce parc", type="primary", key="btn_delete"):
+            confirm_delete(code_to_delete, parc_names.get(code_to_delete, ""))
 
-    df_history = get_history(st.session_state["history_code_parc"])
-    df_histo = df_history.copy()
+with tab_history:
+    @st.fragment
+    def show_history_info():
+        st.subheader("Historique des modifications")
+        if df_parks.empty:
+            st.info("Aucun parc.")
+        else:
+            parc_list = df_parks["CODE_PARC"].tolist()
+            parc_names = df_parks.set_index("CODE_PARC")["NOM_PARC"].to_dict()
+            options_hist = [f"{code} — {parc_names.get(code, '')}" for code in parc_list]
+            with st.form(key="form_hist_info"):
+                selected_hist_idx = st.selectbox("Sélectionner un parc", range(len(options_hist)),
+                                                  format_func=lambda i: options_hist[i], key="hist_select")
+                submitted_hist = st.form_submit_button("Afficher l'historique", type="primary")
+            if submitted_hist:
+                code_hist = parc_list[selected_hist_idx]
 
-    df_histo["CODE_VILLE"] = df_histo["CODE_VILLE"].map(ville_labels)
-    df_histo["CODE_SECTEUR"] = df_histo["CODE_SECTEUR"].map(secteur_labels)
-    df_histo["CODE_DISTRICT"] = df_histo["CODE_DISTRICT"].map(district_labels)
-    df_histo["CODE_TYPE_PARC"] = df_histo["CODE_TYPE_PARC"].map(type_labels)
-    df_histo["CODE_GESTION"] = df_histo["CODE_GESTION"].map(gestion_labels)
-    df_histo["CODE_PEAGEUR"] = df_histo["CODE_PEAGEUR"].map(peageur_labels)
-    df_histo["CODE_FLAG_FOURRIERE"] = df_histo["CODE_FLAG_FOURRIERE"].map(fourriere_labels)
-    df_histo["CODE_FLAG_METSTATION"] = df_histo["CODE_FLAG_METSTATION"].map(metstation_labels)
-    df_histo["CODE_FLAG_CASIER_IRV"] = df_histo["CODE_FLAG_CASIER_IRV"].map(casier_irv_labels)
+                from core.db import get_session
+                session = get_session()
+                df_hist = session.sql(f"""
+                    SELECT * FROM S_REFERENTIEL.T_R_PARC
+                    WHERE CODE_PARC = '{code_hist}'
+                    ORDER BY DATE_DEBUT DESC
+                """).to_pandas()
 
-    st.markdown("### 📊 Historique des versions")
+                if df_hist.empty:
+                    st.info("Aucun historique pour ce parc.")
+                else:
+                    df_h = df_hist.copy()
+                    df_h["VILLE"] = df_h["CODE_VILLE"].map(ville_labels)
+                    df_h["SECTEUR"] = df_h["CODE_SECTEUR"].map(secteur_labels)
+                    df_h["DISTRICT"] = df_h["CODE_DISTRICT"].map(district_labels)
+                    df_h["TYPE"] = df_h["CODE_TYPE_PARC"].map(type_labels)
+                    df_h["FOURRIERE"] = df_h["CODE_FLAG_FOURRIERE"].map(fourriere_labels)
+                    df_h["METSTATION"] = df_h["CODE_FLAG_METSTATION"].map(metstation_labels)
+                    st.caption(f"Historique du parc **{code_hist}** — {len(df_h)} version(s)")
+                    st.dataframe(
+                        df_h[["CODE_PARC", "NOM_PARC", "ADRESSE_PARC", "VILLE", "SECTEUR", "DISTRICT", "TYPE",
+                              "FOURRIERE", "METSTATION", "DATE_CREATION", "NOM_CREATEUR",
+                              "DATE_MODIFICATION", "NOM_MODIFICATEUR", "DATE_DEBUT", "DATE_FIN", "IS_ACTIVE"]],
+                        use_container_width=True, hide_index=True,
+                        column_config={
+                            "CODE_PARC": st.column_config.TextColumn("Code Parc"),
+                            "NOM_PARC": st.column_config.TextColumn("Nom Parc"),
+                            "ADRESSE_PARC": st.column_config.TextColumn("Adresse"),
+                            "VILLE": st.column_config.TextColumn("Ville"),
+                            "SECTEUR": st.column_config.TextColumn("Secteur"),
+                            "DISTRICT": st.column_config.TextColumn("District"),
+                            "TYPE": st.column_config.TextColumn("Type d'ouvrage"),
+                            "FOURRIERE": st.column_config.TextColumn("Fourrière"),
+                            "METSTATION": st.column_config.TextColumn("Metstation"),
+                            "DATE_CREATION": st.column_config.DatetimeColumn("Date création", format="DD/MM/YYYY HH:mm"),
+                            "NOM_CREATEUR": st.column_config.TextColumn("Créateur"),
+                            "DATE_MODIFICATION": st.column_config.DatetimeColumn("Date modification", format="DD/MM/YYYY HH:mm"),
+                            "NOM_MODIFICATEUR": st.column_config.TextColumn("Modificateur"),
+                            "DATE_DEBUT": st.column_config.DatetimeColumn("Date début", format="DD/MM/YYYY HH:mm"),
+                            "DATE_FIN": st.column_config.TextColumn("Date fin"),
+                            "IS_ACTIVE": st.column_config.TextColumn("Actif"),
+                        }
+                    )
 
-    st.dataframe(
-        df_histo.style.apply(
-            lambda x: ["background-color: #d4fcd4" if x.IS_ACTIVE else "" for _ in x],
-            axis=1
-        )
-    )
-
-    if st.button("❌ Fermer historique"):
-        del st.session_state["history_code_parc"]
-        st.rerun()
-        
-# =========================
-# ➕ CREATE
-# =========================
-st.subheader("➕ Ajouter un parc")
-
-col1, col2 = st.columns(2)
-
-# =========================
-# COLONNE 1
-# =========================
-with col1:
-
-    code_parc = st.text_input("Code parc")
-    nom = st.text_input("Nom parc")
-    adresse = st.text_input("Adresse")
-
-    ville_options = {v: k for k, v in ville_labels.items()}
-    ville = st.selectbox("Ville", list(ville_options.keys()))
-    code_ville = ville_options[ville]
-
-    secteur_options = {v: k for k, v in secteur_labels.items()}
-    secteur = st.selectbox("Secteur", list(secteur_options.keys()))
-    code_secteur = secteur_options[secteur]
-
-    district_options = {v: k for k, v in district_labels.items()}
-    district = st.selectbox("District", list(district_options.keys()))
-    code_district = district_options[district]
-
-    type_options = {v: k for k, v in type_labels.items()}
-    type_parc = st.selectbox("Type de parc", list(type_options.keys()))
-    code_type = type_options[type_parc]
-
-
-# =========================
-# COLONNE 2
-# =========================
-with col2:
-
-    gestion_options = {v: k for k, v in gestion_labels.items()}
-    gestion = st.selectbox("Gestion", list(gestion_options.keys()))
-    code_gestion = gestion_options[gestion]
-
-    peageur_options = {v: k for k, v in peageur_labels.items()}
-    peageur = st.selectbox("Péageur", list(peageur_options.keys()))
-    code_peageur = peageur_options[peageur]
-
-    nombre_niveau = st.number_input("Nombre de niveau", value=0,key="create_nombre_niveau")
-
-    fourriere_options = {v: k for k, v in fourriere_labels.items()}
-    fourriere = st.selectbox("Fourrière", list(fourriere_options.keys()))
-    code_fourriere = fourriere_options[fourriere]
-
-    metstation_options = {v: k for k, v in metstation_labels.items()}
-    metstation = st.selectbox("Metstation", list(metstation_options.keys()))
-    code_metstation = metstation_options[metstation]
-
-    casier_irv_options = {v: k for k, v in casier_irv_labels.items()}
-    casier_irv = st.selectbox("Casier IRV", list(casier_irv_options.keys()), key="create_casier_irv")
-    code_casier_irv = casier_irv_options[casier_irv]
-
-    surface = st.text_input( "Surface", value=0)
-    surface=clean_value(surface,"number")
-
-if st.button("➕ Créer le parc"):
-
-    insert_park({
-        "CODE_PARC": code_parc,
-        "NOM_PARC": nom,
-        "ADRESSE_PARC": adresse,
-        "CODE_VILLE": code_ville,
-        "CODE_SECTEUR": code_secteur,
-        "CODE_DISTRICT": code_district,
-        "CODE_TYPE_PARC": code_type,
-        "CODE_GESTION": code_gestion,
-        "CODE_PEAGEUR": code_peageur,
-        "NOMBRE_NIVEAU": nombre_niveau,
-        "CODE_FLAG_FOURRIERE": code_fourriere,
-        "CODE_FLAG_METSTATION": code_metstation,
-        "CODE_FLAG_CASIER_IRV": code_casier_irv,
-        "SURFACE": surface,
-        "NOM_CREATEUR": user,
-        "NOM_MODIFICATEUR": user,
-        "DATE_CREATION": datetime.now(pytz.timezone("Europe/Paris"))
-    })
-
-    st.session_state["message"] = "Parc créé ✅"
-    st.session_state["message_type"] = "success"
-    st.rerun()
-
-# =========================
-# 🗑 DELETE
-# =========================
-st.subheader("🗑️ Suppression")
-
-to_delete = st.selectbox(
-    "Sélectionner un parc",
-    df_parks["CODE_PARC"]
-)
-
-if st.button("Supprimer"):
-    delete_park(to_delete,user)
-    st.session_state["message"] = "Parc supprimé"
-    st.session_state["message_type"] = "warning"
-    st.rerun()
+    show_history_info()
