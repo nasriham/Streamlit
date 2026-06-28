@@ -1,36 +1,246 @@
+# Streamlit app for parking management with MetPark theme
+# Co-authored with CoCo
 import streamlit as st
-from core.db import get_session
 
+# -- Page config --
 st.set_page_config(
-    page_title="Gestion des référentiels",
-    page_icon="assets/logo.png"
+    page_title="MetPark - Gestion des parcs",
+    page_icon="assets/MTPK_logo.png",
+    layout="wide",
 )
 
-session = get_session()
-current_db = session.get_current_database()
+# -- Theme MetPark : bleu marine + accent rouge/orange --
+st.markdown("""
+<style>
+    /* ===== FOND & LAYOUT ===== */
+    .stApp {
+        background-color: #F7F9FC;
+    }
 
-if "DEV" in current_db:
-    ENV = "DEV"
-elif "QUA" in current_db:
-    ENV = "QUA"
-elif "PPD" in current_db:
-    ENV = "PPD"
-else:
-    ENV = "PROD"
+    /* Sidebar sobre avec accent orange discret */
+    section[data-testid="stSidebar"] {
+        background-color: #FFFFFF;
+        border-right: 2px solid rgba(233, 75, 46, 0.3);
+    }
+    section[data-testid="stSidebar"] .stMarkdown h1,
+    section[data-testid="stSidebar"] .stMarkdown h2,
+    section[data-testid="stSidebar"] .stMarkdown h3 {
+        color: #0B2545 !important;
+    }
 
-if ENV == "DEV":
-    st.error("🚧 ENVIRONNEMENT DEVELOPPEMENT")
-elif ENV == "QUA":
-    st.warning("🧪 ENVIRONNEMENT QUALIFICATION")
-elif ENV == "PPD":
-    st.success("✅ ENVIRONNEMENT PRE-PRODUCTION")
+    /* ===== TYPOGRAPHIE ===== */
+    h1, h2, h3 {
+        color: #0B2545 !important;
+        font-weight: 700;
+    }
+    h4, h5, h6 {
+        color: #123C69 !important;
+        font-weight: 600;
+    }
+    p, li, span, label {
+        color: #1E293B;
+    }
 
-    
-# Header
-col1, col2 = st.columns([1, 5])
-with col1:
-    st.image("assets/logo.png", width=120)
-with col2:
-    st.title("Gestion des référentiels")
+    /* ===== BOUTONS ===== */
+    .stButton > button[kind="primary"],
+    .stButton > button[data-testid="baseButton-primary"],
+    .stFormSubmitButton > button {
+        background-color: #E94B2E !important;
+        border-color: #E94B2E !important;
+        color: white !important;
+        border-radius: 10px;
+        font-weight: 600;
+        padding: 0.5rem 1.2rem;
+        transition: all 0.2s ease;
+    }
+    .stButton > button[kind="primary"]:hover,
+    .stButton > button[data-testid="baseButton-primary"]:hover,
+    .stFormSubmitButton > button:hover {
+        background-color: #C7391F !important;
+        border-color: #C7391F !important;
+        color: white !important;
+    }
+    .stButton > button {
+        border-radius: 10px;
+        border: 1px solid #E2E8F0;
+        color: #0B2545;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    .stButton > button:hover {
+        background-color: #E94B2E;
+        border-color: #E94B2E;
+        color: white;
+    }
 
-st.write("Utilisez le menu à gauche pour naviguer dans les fonctions.")
+    /* ===== ONGLETS (Tabs) ===== */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px 8px 0 0;
+        padding: 10px 20px;
+        font-weight: 500;
+        color: #64748B;
+    }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        color: #0B2545;
+        font-weight: 700;
+    }
+    div[data-baseweb="tab-highlight"] {
+        background-color: #E94B2E;
+    }
+
+    /* ===== METRIQUES (KPI cards) ===== */
+    [data-testid="stMetric"] {
+        background: #FFFFFF;
+        padding: 18px 22px;
+        border-radius: 14px;
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    }
+    [data-testid="stMetric"] label {
+        color: #64748B !important;
+        font-size: 0.85rem;
+    }
+    [data-testid="stMetric"] [data-testid="stMetricValue"] {
+        color: #0B2545 !important;
+        font-weight: 700;
+    }
+
+    /* ===== TABLEAUX ===== */
+    div[data-testid="stDataFrame"] {
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        overflow: hidden;
+    }
+    div[data-testid="stDataFrame"] table {
+        border-collapse: separate;
+    }
+    div[data-testid="stDataFrame"] thead th {
+        background-color: #0B2545 !important;
+        color: white !important;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== EXPANDERS ===== */
+    .streamlit-expanderHeader {
+        font-weight: 600;
+        color: #0B2545;
+    }
+
+    /* ===== SELECTBOX & INPUTS ===== */
+    .stSelectbox > div > div,
+    .stMultiSelect > div > div,
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea {
+        border-radius: 8px;
+        border-color: #E2E8F0;
+    }
+    .stSelectbox > div > div:focus-within,
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #123C69;
+        box-shadow: 0 0 0 2px rgba(18, 60, 105, 0.1);
+    }
+
+    /* ===== CHECKBOX ===== */
+    .stCheckbox label span[data-testid="stCheckbox"] {
+        color: #0B2545;
+    }
+
+    /* ===== LIENS ===== */
+    a {
+        color: #E94B2E;
+    }
+    a:hover {
+        color: #0B2545;
+    }
+
+    /* ===== ALERTES ===== */
+    .stAlert[data-baseweb="notification"] {
+        border-radius: 10px;
+    }
+
+    /* ===== DIVIDER ===== */
+    hr {
+        border-color: #E2E8F0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# -- Navigation --
+page = st.navigation([
+    st.Page("pages/0_Accueil.py", title="Gestion parc", icon="🏠", default=True),
+    st.Page("pages/1_Informations générales.py", title="Informations générales", icon="📋"),
+    st.Page("pages/2_Exploitation.py", title="Informations ouvrage", icon="🏗️"),
+    st.Page("pages/3_Equipement acces.py", title="Equipement & Acces", icon="🔧"),
+    st.Page("pages/4_Juridique.py", title="Juridique", icon="⚖️"),
+    st.Page("pages/5_Sécurité incendie.py", title="Sécurité incendie", icon="🔥"),
+])
+
+# -- Sidebar : badge environnement + logo --
+with st.sidebar:
+    from core.db import get_session
+    session = get_session()
+    current_db = session.get_current_database()
+
+    if "DEV" in current_db:
+        ENV = "DEV"
+    elif "QUA" in current_db:
+        ENV = "QUA"
+    elif "PPD" in current_db:
+        ENV = "PPD"
+    else:
+        ENV = "PROD"
+
+    if ENV != "PROD":
+        colors = {"DEV": ("#FEF3C7", "#92400E", "DEV"), "QUA": ("#E0E7FF", "#3730A3", "QUA"), "PPD": ("#D1FAE5", "#065F46", "PPD")}
+        bg, txt, label = colors.get(ENV, ("#F3F4F6", "#374151", ENV))
+        st.markdown(
+            f'<div style="text-align:center;margin-bottom:8px;">'
+            f'<span style="background:{bg};color:{txt};padding:4px 12px;border-radius:20px;font-size:0.7rem;font-weight:700;letter-spacing:1px;">'
+            f'{label}</span></div>',
+            unsafe_allow_html=True,
+        )
+    col1, col2, col3 = st.columns([1, 3, 1])
+    with col2:
+        st.image("assets/MTPK_logo.png", width=160)
+
+    # -- Footer sidebar : support --
+    st.markdown("---")
+    with st.popover("Contacter Equipe Data — Seenovate"):
+        st.markdown("**Equipe Data — Seenovate**")
+        st.markdown("[Arssalane BOURASS](mailto:Arssalane.BOURASS@seenovate.com)")
+        st.markdown("[Hamza NASRI](mailto:hamza.nasri@seenovate.com)")
+        st.markdown("[Benoit OTTAVI](mailto:benoit.ottavi@seenovate.com)")
+        st.markdown("[Thibault ZIBERT](mailto:thibault.zibert@seenovate.com)")
+    st.markdown(
+        '<p style="text-align:center;font-size:0.6rem;color:#94A3B8;margin:8px 0 0 0;">v1.0 — 2026</p>',
+        unsafe_allow_html=True,
+    )
+
+    # CSS pour forcer la taille sidebar (logo + popover) indépendamment de la version Streamlit
+    st.markdown("""
+    <style>
+        section[data-testid="stSidebar"] img {
+            max-width: 120px !important;
+            margin: 0 auto;
+            display: block;
+        }
+        section[data-testid="stSidebar"] .stPopover > button {
+            font-size: 0.75rem !important;
+            padding: 6px 12px !important;
+            width: 100% !important;
+        }
+        section[data-testid="stSidebar"] .stColumns {
+            max-width: 180px;
+            margin: 0 auto;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+page.run()

@@ -1,0 +1,28 @@
+definition_version: 2
+entities:
+  streamlit_app:
+    type: streamlit
+    identifier:
+      database: DB_REFERENTIEL_DEV
+      schema: S_REFERENTIEL
+      name: GESTION_DES_PARCS
+    title: Gestion des parcs
+    query_warehouse: WH_HORS_PRODUCTION
+    compute_pool: SYSTEM_COMPUTE_POOL_CPU
+    run_mode: SpcsOnly
+    execute_as: OWNER
+    main_file: Gestion_parc.py
+    artifacts:
+      - pyproject.toml
+      - Gestion_parc.py
+      - .streamlit/config.toml
+      - core/db.py
+      - core/queries.py
+      - core/functions.py
+      - pages/1_Informations générales.py
+      - pages/0_Accueil.py
+      - pages/2_Exploitation.py
+      - pages/3_Equipement acces.py
+      - pages/4_Juridique.py
+      - pages/5_Sécurité incendie.py
+      - assets/MTPK_logo.png
